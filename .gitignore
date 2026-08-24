@@ -1,0 +1,11 @@
+/.idea/
+target
+/logs/
+/domain/
+/eearly-admin.iml
+/docs/tasks.md
+/.java-version
+/CLAUDE.md
+/.junie/
+/.vscode/
+/.codex

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "ResponseErrorProto";
+
+
+message Error {
+  string message = 1;
+  ErrorCode code = 2;
+}
+
+enum ErrorCode {
+  OK = 0;
+  INTERNAL_ERROR = 1;
+  VALIDATION_ERROR = 2;
+  ALREADY_EXISTS = 3;
+}

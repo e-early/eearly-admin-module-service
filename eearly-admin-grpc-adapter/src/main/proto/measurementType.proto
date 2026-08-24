@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "MeasurementTypeProto";
+
+service MeasurementTypeService {
+  rpc GetMeasurementTypes(GetMeasurementTypesRequestEmpty) returns (GetMeasurementTypesResponse) {}
+}
+
+message GetMeasurementTypesRequestEmpty {}
+
+message GetMeasurementTypesResponse {
+  repeated MeasurementType measurementTypes = 1;
+}
+
+message MeasurementType {
+  string measurementTypeId = 1;
+  MeasurementTypeEnum measurementType = 2;
+  MeasurementSubTypeEnum measurementSubType = 3;
+  double minValue = 4;
+  double maxValue = 5;
+  string unit = 6;
+}
+
+enum MeasurementTypeEnum {
+  UNKNOWN_MEASUREMENT_TYPE = 0;
+  BLOOD_PRESSURE = 1;
+  BLOOD_GLUCOSE = 2;
+  BODY_WEIGHT = 3;
+  BODY_HEIGHT = 4;
+  HEART_RATE = 5;
+  OXYGEN_SATURATION = 6;
+  HEART_RATE_VARIABILITY = 7;
+  STRESS_LEVEL = 8;
+  GLUCOSE_VARIABILITY = 9;
+  BODY_TEMPERATURE = 10;
+}
+
+enum MeasurementSubTypeEnum {
+  UNKNOWN_MEASUREMENT_SUB_TYPE = 0;
+  SYSTOLIC = 1;
+  DIASTOLIC = 2;
+}

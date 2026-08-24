@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "MeasurementProto";
+
+service MeasurementService {
+  rpc CreateMeasurement (CreateMeasurementRequest) returns (CreateMeasurementResponse) {}
+
+  rpc UpdateMeasurement (UpdateMeasurementRequest) returns (UpdateMeasurementResponse) {}
+
+  rpc GetMeasurements (GetMeasurementsRequest) returns (GetMeasurementsResponse) {}
+
+  rpc GetMeasurementsForUser (GetMeasurementsForUserRequest) returns (GetMeasurementsResponse) {}
+}
+
+message CreateMeasurementRequest {
+  repeated CreateMeasurement measurements = 1;
+}
+
+message GetMeasurementsRequest {
+  repeated string measurementTypes = 1;
+  string startDateTime = 2;
+  string endDateTime = 3;
+}
+
+message GetMeasurementsForUserRequest {
+  string userId = 1;
+  repeated string measurementTypes = 2;
+  string startDateTime = 3;
+  string endDateTime = 4;
+  int32 page = 5;
+  int32 size = 6;
+}
+
+message GetMeasurementsResponse {
+  repeated Measurement measurements = 1;
+  int32 page = 2;
+  int32 size = 3;
+  int64 totalElements = 4;
+  int32 totalPages = 5;
+}
+
+message CreateMeasurementResponse {
+
+}
+
+message CreateMeasurement {
+  string measuredAt = 1;
+  string measurementTypeId = 2;
+  double value = 3;
+  string deviceId = 4;
+  int32 measurementGroupId = 5;
+  MeasurementMode measurementMode = 6;
+  string measurementBatchId = 7;
+}
+
+message UpdateMeasurementRequest {
+  Measurement measurement = 1;
+}
+
+message UpdateMeasurementResponse {
+  Measurement measurement = 1;
+}
+
+message Measurement {
+  string id = 1;
+  string measuredAt = 2;
+  string measurementTypeId = 3;
+  double value = 4;
+  string deviceId = 5;
+  int32 measurementGroupId = 6;
+  string measurementBatchId = 7;
+  MeasurementMode measurementMode = 8;
+}
+
+enum MeasurementMode {
+  SINGLE = 0;
+  BATCH = 1;
+  CONTINUOUS = 2;
+}

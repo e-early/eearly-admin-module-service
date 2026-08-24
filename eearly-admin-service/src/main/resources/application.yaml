@@ -1,0 +1,91 @@
+server:
+  port: 9000
+
+logging:
+  file:
+    name: ${LOGGING_FILE_PATH}
+  loggers:
+    http:
+      enabled: true
+      log-response: true
+      log-authorization-header: false
+    method:
+      enabled: true
+
+spring:
+  application:
+    name: eearly-admin-service
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_SERVICE_USER}
+    password: ${DB_SERVICE_PASS}
+    hikari:
+      schema: ${DB_SCHEMA}
+  flyway:
+    url: ${DB_URL}
+    user: ${DB_FLYWAY_USER}
+    password: ${DB_FLYWAY_PASS}
+    locations: ${DB_FLYWAY_MIGRATION_PATHS:classpath:db/migration}
+    schemas:
+      - ${DB_SCHEMA}
+      - ${DB_AUDIT_SCHEMA}
+    default-schema: ${DB_SCHEMA}
+    out-of-order: true
+    placeholders:
+      schema: ${DB_SCHEMA}
+      audit_schema: ${DB_AUDIT_SCHEMA}
+      apnea_service_endpoint: ${APNEA_SERVICE_ENDPOINT:http://localhost:3001}
+  jpa:
+    open-in-view: false
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+      ddl-auto: validate
+    properties:
+      hibernate:
+        show_sql: true
+        default_schema: ${DB_SCHEMA}
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+      allowed-methods: GET, POST, PUT, DELETE, OPTIONS
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWK_SET_URI}
+
+  grpc:
+    client:
+      channels:
+        mobile-backend:
+          address: ${GRPC_ADDRESS:static://localhost:9090}
+          max-inbound-message-size: ${GRPC_MAX_INBOUND_MESSAGE_SIZE:10MB}
+          max-inbound-metadata-size: ${GRPC_MAX_INBOUND_METADATA_SIZE:10MB}
+
+springdoc:
+  swagger-ui:
+    url: ${SWAGGER_URL:/v3/api-docs}
+
+service:
+  domain: ${SERVICE_DOMAIN_URL}
+
+mobile:
+  service:
+    base-url: ${MOBILE_SERVICE_BASE_URL}
+  keycloak:
+    base-url: ${MOBILE_KEYCLOAK_BASE_URL}
+    realm: ${MOBILE_KEYCLOAK_REALM}
+    admin-client:
+      id: ${MOBILE_KEYCLOAK_ADMIN_CLIENT_ID:admin-service}
+      secret: ${MOBILE_KEYCLOAK_ADMIN_CLIENT_SECRET}
+
+algorithm:
+  api:
+    default-timeout-seconds: ${BENTOML_TIMEOUT:3600}
+    async-poll-interval-ms: ${BENTOML_POLL_INTERVAL:5000}
+    api-key: ${BENTOML_API_KEY:}
+    basic-auth:
+      username: ${ALGORITHM_BASIC_AUTH_USERNAME:}
+      password: ${ALGORITHM_BASIC_AUTH_PASSWORD:}
+    verify-ssl: ${BENTOML_VERIFY_SSL:true}

@@ -1,0 +1,10 @@
+services:
+  eearly-admin-db:
+    image: postgres:17
+    container_name: eearly-admin-db
+    environment:
+      POSTGRES_USER: eearly-admin
+      POSTGRES_PASSWORD: eearly-admin
+      POSTGRES_DB: eearly-admin_db
+    ports:
+      - "5432:5432"

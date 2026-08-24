@@ -1,0 +1,86 @@
+services:
+  eearly-admin-db:
+    image: postgres:17
+    container_name: '{{ component_name }}-db'
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: '{{ db_name }}'
+      POSTGRES_USER: '{{ db_user }}'
+      POSTGRES_PASSWORD: '{{ db_password }}'
+
+    ports:
+      - '{{ db_port }}:5432'
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    networks:
+      - admin-net
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ db_user }} -d {{ db_name }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  eearly-admin-service:
+    image: nexus.result.si/{{ project_name }}/{{ component_name }}:{{ tag }}
+    container_name: '{{ component_name }}'
+    pull_policy: always
+    restart: unless-stopped
+
+    depends_on:
+      eearly-admin-db:
+        condition: service_healthy
+
+    ports:
+      - '{{ api_port }}:9000'
+
+    environment:
+      SERVICE_DOMAIN_URL: '{{ service_domain_url }}'
+      DB_URL: '{{ db_url }}'
+      DB_SCHEMA: '{{ db_schema }}'
+      DB_AUDIT_SCHEMA: '{{ audit_schema }}'
+      DB_SERVICE_USER: '{{ service_db_username }}'
+      DB_SERVICE_PASS: '{{ service_db_password }}'
+      DB_FLYWAY_USER: '{{ flyway_db_username }}'
+      DB_FLYWAY_PASS: '{{ flyway_db_password }}'
+      DB_FLYWAY_MIGRATION_PATHS: '{{ flyway_db_migration_paths }}'
+      APNEA_SERVICE_ENDPOINT: '{{ apnea_service_endpoint }}'
+      JWK_SET_URI: '{{ jwk_set_uri }}'
+      MOBILE_KEYCLOAK_BASE_URL: '{{ mobile_keycloak_base_url }}'
+      MOBILE_KEYCLOAK_REALM: '{{ mobile_keycloak_realm }}'
+      SERVER_SERVLET_CONTEXT_PATH: '{{ server_servlet_context_path }}'
+      LOGGING_FILE_PATH: /var/log/{{ project_name }}/{{  component_name }}.log
+      CORS_ALLOWED_ORIGINS: '{{ cors_allowed_origins }}'
+      MOBILE_SERVICE_BASE_URL: '{{ mobile_service_base_url }}'
+      MOBILE_KEYCLOAK_ADMIN_CLIENT_ID: '{{ mobile_keycloak_admin_client_id }}'
+      MOBILE_KEYCLOAK_ADMIN_CLIENT_SECRET: '{{ mobile_keycloak_admin_client_secret }}'
+      ALGORITHM_BASIC_AUTH_USERNAME: '{{ algorithm_basic_auth_username }}'
+      ALGORITHM_BASIC_AUTH_PASSWORD: '{{ algorithm_basic_auth_password }}'
+      GRPC_ADDRESS: '{{ grpc_address }}'
+    volumes:
+      - '{{ logging_volume_path }}:/var/log/{{ project_name }}:z'
+
+    networks:
+      - proxy
+      - admin-net
+
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+
+      - traefik.http.routers.{{ component_name }}.rule=Host(`{{ service_domain }}`) && PathPrefix(`/{{ component_name }}`)
+      - traefik.http.routers.{{ component_name }}.entrypoints=web
+      - traefik.http.routers.{{ component_name }}.priority=100 #needs to be higher then UI since UI is catching all requests
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  admin-net:
+    driver: bridge
+  proxy:
+    external: true

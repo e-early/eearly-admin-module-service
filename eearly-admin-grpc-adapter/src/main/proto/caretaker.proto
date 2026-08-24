@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "CaretakerProto";
+
+import "responseError.proto";
+
+service CaretakerService {
+  rpc GetCaretaker(GetCaretakerEmptyRequest) returns (GetCaretakerResponse) {}
+  rpc UpsertCaretaker (UpsertCaretakerRequest) returns (UpsertCaretakerResponse) {}
+}
+
+message GetCaretakerEmptyRequest {}
+
+message GetCaretakerResponse {
+  Caretaker caretaker = 1;
+}
+
+message UpsertCaretakerRequest {
+  Caretaker caretaker = 1;
+}
+
+message UpsertCaretakerResponse {
+  Error error = 1;
+}
+
+message Caretaker {
+  string id = 1;
+  string name = 2;
+  string facilityId = 3;
+}
