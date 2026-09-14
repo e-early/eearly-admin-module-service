@@ -21,7 +21,7 @@ Does **not** include organization/department/health-condition management, QR onb
 | Java | 21+ |
 | Maven | 3.9+ |
 | Docker | admin Postgres; also EHR + mobile infra |
-| Nexus | `https://nexus.result.si` (parent POM + deps) |
+| Nexus | *optional* — `https://nexus.result.si` (parent POM + internal deps); not required to build, see below |
 | `grpcurl` | for ingesting measurements into mobile (optional install below) |
 | `jq` | helpful for curl responses |
 
@@ -272,7 +272,11 @@ Use profile `unrestricted`, or configure `JWK_SET_URI` and send a Bearer token.
 
 ### Nexus / Maven resolve failure
 
-VPN / access to `https://nexus.result.si`.
+This project's internal (`si.result.lib`) dependencies are vendored into
+[`libs-repo/`](libs-repo/README.md), so `mvn package` does **not** require VPN/Nexus access —
+if you're hitting a resolve failure, it's most likely a public artifact (Maven Central) instead;
+retry, or check your network. If you *do* have `nexus.result.si` access and prefer to resolve
+from there instead of the vendored copies, see the note in `libs-repo/README.md`.
 
 ---
 

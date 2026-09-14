@@ -4,6 +4,13 @@
     <groupId>si.result.lib</groupId>
     <artifactId>spring-boot-service</artifactId>
     <version>1.1.1-SNAPSHOT</version>
+    <!--
+      Points directly at the vendored copy (see libs-repo/README.md) instead of relying on
+      <repositories> below: ${project.basedir} isn't interpolated yet at the point Maven
+      resolves <parent>, so a repository URL built from it can't be used for that step; it only
+      works for resolving this project's other (non-parent) dependencies, later on.
+    -->
+    <relativePath>libs-repo/si/result/lib/spring-boot-service/1.1.1-SNAPSHOT/spring-boot-service-1.1.1-SNAPSHOT.pom</relativePath>
   </parent>
   <groupId>si.result.eearly</groupId>
   <artifactId>eearly-admin</artifactId>
@@ -30,14 +37,31 @@
     </notifiers>
   </ciManagement>
 
+  <!--
+    si.result.lib:spring-boot-service (this project's parent), rest-filter, spring-boot-bricks,
+    spring-boot-logger and logger are internal Result libraries normally resolved from
+    nexus.result.si, which isn't reachable outside the organization's VPN. To let this be built
+    and run outside the organization, their built jars are vendored into ./libs-repo and resolved
+    from there instead ; see libs-repo/README.md for what that is and its current limitations
+    (no license, no source, not a real publish ; a stopgap, not an open-sourcing of those
+    libraries). If you do have nexus.result.si access, you can remove this repository and restore
+    the original one pointing at https://nexus.result.si/repository/result-lib/ instead.
+  -->
   <repositories>
+    <!--
+      Our parent (si.result.lib:spring-boot-service) still declares its own "result-lib"
+      repository pointing at the real nexus.result.si, and that stays inherited alongside this
+      one; if you do have VPN/Nexus access, Maven may resolve some artifacts from there instead
+      of this folder, which is harmless. This entry exists so the si.result.lib/r3 artifacts still
+      resolve when nexus.result.si is NOT reachable. Uses ${maven.multiModuleProjectDirectory},
+      not ${project.basedir}: the latter is resolved per-submodule in a reactor build, so it would
+      point at (e.g.) eearly-admin-service/libs-repo, not the repo root, for every module except
+      the aggregator itself.
+    -->
     <repository>
-      <id>result-lib</id>
-      <name>Result Lib</name>
-      <url>https://nexus.result.si/repository/result-lib/</url>
-      <snapshots>
-        <updatePolicy>always</updatePolicy>
-      </snapshots>
+      <id>vendored-libs</id>
+      <name>Vendored si.result.lib dependencies (bundled for builds without VPN/Nexus access)</name>
+      <url>file://${maven.multiModuleProjectDirectory}/libs-repo</url>
     </repository>
   </repositories>
 
