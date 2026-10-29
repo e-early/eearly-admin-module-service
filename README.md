@@ -21,7 +21,7 @@ Does **not** include organization/department/health-condition management, QR onb
 | Java | 21+ |
 | Maven | 3.9+ |
 | Docker | admin Postgres; also EHR + mobile infra |
-| Nexus | *optional* — `https://nexus.result.si` (parent POM + internal deps); not required to build, see below |
+| Nexus | *optional* — `https://<nexus-host>` (parent POM + internal deps); not required to build, see below |
 | `grpcurl` | for ingesting measurements into mobile (optional install below) |
 | `jq` | helpful for curl responses |
 
@@ -83,7 +83,7 @@ export MOBILE_KEYCLOAK_ADMIN_CLIENT_SECRET=JTAk6BzrwcIumfUVh6TssRUbU7wTTZl5
 export GRPC_ADDRESS=static://localhost:8082
 
 # Hosted model (acceptance example). Local mock: http://localhost:3001
-export APNEA_SERVICE_ENDPOINT=http://10.10.10.78:3001
+export APNEA_SERVICE_ENDPOINT=http://<apnea-service-host>:3001
 
 # Required when the model returns HTTP 401 "Authorization header missing"
 export ALGORITHM_BASIC_AUTH_USERNAME=eearly-bentoml_auth_user
@@ -275,7 +275,7 @@ Use profile `unrestricted`, or configure `JWK_SET_URI` and send a Bearer token.
 This project's internal (`si.result.lib`) dependencies are vendored into
 [`libs-repo/`](libs-repo/README.md), so `mvn package` does **not** require VPN/Nexus access —
 if you're hitting a resolve failure, it's most likely a public artifact (Maven Central) instead;
-retry, or check your network. If you *do* have `nexus.result.si` access and prefer to resolve
+retry, or check your network. If you *do* have `<nexus-host>` access and prefer to resolve
 from there instead of the vendored copies, see the note in `libs-repo/README.md`.
 
 ---

@@ -1,7 +1,7 @@
 # Vendored dependencies
 
 This folder is a flat-file Maven repository, committed into this repo so the project can be
-built and run **without VPN/Nexus access to `nexus.result.si`**. `pom.xml` points Maven at it
+built and run **without VPN/Nexus access to `<nexus-host>`**. `pom.xml` points Maven at it
 (`<repositories><repository><id>vendored-libs</id>...`) instead of the internal
 `result-lib` Nexus repository.
 
@@ -30,7 +30,7 @@ project depends on, copied as-is from an internal build:
   change that legal status.
 - **No source is included** — only compiled bytecode. If you need to read, audit, or modify what
   these libraries actually do, that's not possible from this folder alone.
-- If you *do* have `nexus.result.si` access, prefer reverting `pom.xml`'s `<repositories>` block
+- If you *do* have `<nexus-host>` access, prefer reverting `pom.xml`'s `<repositories>` block
   to point at the real internal repository instead of this folder — it will get you current
   (non-frozen) versions and, for `spring-boot-bricks`/`rest-filter`, sources on demand.
 
