@@ -65,19 +65,6 @@
     </repository>
   </repositories>
 
-  <distributionManagement>
-    <repository>
-      <id>e-early-backend-release</id>
-      <name>eEarly Backend Release</name>
-      <url>https://nexus.result.si/repository/eearly-backend-release/</url>
-    </repository>
-    <snapshotRepository>
-      <id>e-early-backend-snapshot</id>
-      <name>eEarly Backend Snapshot</name>
-      <url>https://nexus.result.si/repository/eearly-backend-snapshot/</url>
-    </snapshotRepository>
-  </distributionManagement>
-
   <profiles>
     <profile>
       <id>development</id>

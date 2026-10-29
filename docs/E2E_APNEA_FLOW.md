@@ -8,8 +8,8 @@ There is **no bundled mobile app**. You use `curl` and `grpcurl` like a patient 
 
 | Repository | Role |
 |------------|------|
-| [eearly-ehr-module-opensource](https://git.result.si/eearly/eearly-ehr-module-opensource) | EHRbase + EHR Keycloak |
-| [eearly-mobile-module-service-opensource](https://git.result.si/eearly/eearly-mobile-module-service-opensource) | Measurement gateway (REST + gRPC → EHRbase) |
+| [eearly-ehr-module-opensource](https://<git-host>/eearly/eearly-ehr-module-opensource) | EHRbase + EHR Keycloak |
+| [eearly-mobile-module-service-opensource](https://<git-host>/eearly/eearly-mobile-module-service-opensource) | Measurement gateway (REST + gRPC → EHRbase) |
 | **This repo** (admin OSS) | Patients, analyses, algorithm execution, biometrics API |
 
 ---
@@ -61,8 +61,8 @@ There is **no bundled mobile app**. You use `curl` and `grpcurl` like a patient 
 | Docker Compose | EHR, mobile DB/KC, admin Postgres |
 | `curl`, `jq` | Admin REST |
 | `grpcurl` | Ingest measurements (see admin README) |
-| VPN (if needed) | Reach hosted acceptance model (e.g. `10.10.10.78:3001`) |
-| Nexus access | Admin build may need `https://nexus.result.si` |
+| VPN (if needed) | Reach hosted acceptance model (e.g. `<apnea-service-host>:3001`) |
+| Nexus access | Admin build may need `https://<nexus-host>` |
 
 ---
 
@@ -155,7 +155,7 @@ export MOBILE_KEYCLOAK_ADMIN_CLIENT_SECRET=JTAk6BzrwcIumfUVh6TssRUbU7wTTZl5
 export GRPC_ADDRESS=static://localhost:8082
 
 # Model base URL — no trailing /predict
-export APNEA_SERVICE_ENDPOINT=http://10.10.10.78:3001
+export APNEA_SERVICE_ENDPOINT=http://<apnea-service-host>:3001
 
 # Required if the model returns HTTP 401 without auth
 export ALGORITHM_BASIC_AUTH_USERNAME=eearly-bentoml_auth_user
