@@ -39,7 +39,7 @@ class OrganizationServiceTest {
     @Test
     void shouldCallFacilityClient_whenOrganizationIsCreated() {
         // Given
-        CreateOrganizationCommand command = new CreateOrganizationCommand("Test Organization");
+        CreateOrganizationCommand command = new CreateOrganizationCommand("Test Organization", null);
         Organization organization = mock(Organization.class);
         when(organizationRepository.save(any(Organization.class))).thenReturn(organization);
 
@@ -58,8 +58,8 @@ class OrganizationServiceTest {
     void shouldCallFacilityClient_whenOrganizationIsUpdated() {
         // Given
         UUID id = UUID.randomUUID();
-        UpdateOrganizationCommand command = new UpdateOrganizationCommand(id, "Renamed Organization");
-        Organization organization = Organization.create(new CreateOrganizationCommand("Test Organization"));
+        UpdateOrganizationCommand command = new UpdateOrganizationCommand(id, "Renamed Organization", null);
+        Organization organization = Organization.create(new CreateOrganizationCommand("Test Organization", null));
         when(organizationRepository.findById(id)).thenReturn(Optional.of(organization));
         when(organizationRepository.save(organization)).thenReturn(organization);
 
@@ -75,7 +75,7 @@ class OrganizationServiceTest {
 
     @Test
     void shouldRejectOrganizationWithoutName_andNotSyncFacility() {
-        CreateOrganizationCommand command = new CreateOrganizationCommand(null);
+        CreateOrganizationCommand command = new CreateOrganizationCommand(null, null);
 
         DomainException exception = assertThrows(DomainException.class, () -> organizationService.create(command));
 
@@ -100,7 +100,7 @@ class OrganizationServiceTest {
         when(organizationRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(DomainException.class,
-                () -> organizationService.update(new UpdateOrganizationCommand(id, "Test Organization")));
+                () -> organizationService.update(new UpdateOrganizationCommand(id, "Test Organization", null)));
 
         verify(organizationRepository, never()).save(any());
         verifyNoInteractions(organizationClient);

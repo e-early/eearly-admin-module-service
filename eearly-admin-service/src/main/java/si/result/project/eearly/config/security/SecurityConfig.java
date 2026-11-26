@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -56,6 +57,10 @@ public class SecurityConfig {
             // Administration: organizations are managed by administrators only.
             .requestMatchers("/api/v1/organizations", "/api/v1/organizations/**")
                 .hasRole(AdminRoles.ADMINISTRATOR)
+            // Departments are created and changed by administrators only; reading them (profile,
+            // patient form) stays open to any authenticated caller.
+            .requestMatchers(HttpMethod.POST, "/api/v1/departments").hasRole(AdminRoles.ADMINISTRATOR)
+            .requestMatchers(HttpMethod.PUT, "/api/v1/departments/*").hasRole(AdminRoles.ADMINISTRATOR)
             // Service-to-service calls from the mobile backend (e.g. the language a patient picked
             // in the app), made with its own service account's token.
             .requestMatchers("/api/v1/internal/**").hasRole(AdminRoles.MOBILE_SERVICE)

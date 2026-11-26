@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.util.UUID;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,8 +80,8 @@ class OrganizationEndpointSecurityTest {
         token("no-roles-token", "nobody", "{}");
         when(jwtDecoder.decode("invalid")).thenThrow(new BadJwtException("invalid"));
 
-        when(facade.getById(ID)).thenReturn(new OrganizationDTO(ID, "Test Organization"));
-        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization"));
+        when(facade.getById(ID)).thenReturn(new OrganizationDTO(ID, "Test Organization", List.of()));
+        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization", null));
     }
 
     private void token(String value, String subject, String resourceAccess) throws Exception {
