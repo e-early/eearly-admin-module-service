@@ -44,6 +44,9 @@ public enum DomainExceptionCode implements ExceptionCode {
   CARETAKER_EMAIL_NULL("Caretaker email is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_LANGUAGE_NULL("Caretaker language is null", ExceptionReason.ILLEGAL_ARGUMENT),
 
+  ORGANIZATION_NOT_FOUND("Organization not found", ExceptionReason.ENTITY_NOT_FOUND),
+  ORGANIZATION_NAME_NULL("Organization name is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
   MEASUREMENT_NOT_FOUND("Measurement not found", ExceptionReason.ENTITY_NOT_FOUND),
   MEASUREMENT_NAME_NULL("Measurement name is null", ExceptionReason.ILLEGAL_ARGUMENT),
   MEASUREMENT_TYPE_NULL("Measurement type is null", ExceptionReason.ILLEGAL_ARGUMENT),
