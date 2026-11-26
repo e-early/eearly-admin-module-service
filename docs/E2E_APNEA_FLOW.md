@@ -62,7 +62,7 @@ There is **no bundled mobile app**. You use `curl` and `grpcurl` like a patient 
 | `curl`, `jq` | Admin REST |
 | `grpcurl` | Ingest measurements (see admin README) |
 | VPN (if needed) | Reach hosted acceptance model (e.g. `<apnea-service-host>:3001`) |
-| Nexus access | Admin build may need `https://<nexus-host>` |
+| Nexus access | Admin build needs `https://nexus.result.si` (VPN) |
 
 ---
 
