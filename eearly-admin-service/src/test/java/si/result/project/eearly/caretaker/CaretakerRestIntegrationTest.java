@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -72,6 +75,7 @@ import si.result.project.eearly.resource.department.DepartmentController;
 import si.result.project.eearly.resource.organization.OrganizationController;
 import si.result.rest.filter.config.RestFilterArgumentResolver;
 import si.result.spring.boot.bricks.advice.ErrorResponseHandler;
+import si.result.spring.boot.bricks.auth.AuthenticationProvider;
 
 /**
  * Caretakers with their organization and department through the REST controller, facade, domain service and
@@ -100,6 +104,16 @@ class CaretakerRestIntegrationTest {
         @Bean
         CaretakerClient caretakerClient() {
             return mock(CaretakerClient.class);
+        }
+
+        // The caller is an administrator: the access rules are covered by CaretakerEndpointSecurityTest
+        // and CaretakerServiceFacadeTest; this test is about the mapping and the persistence.
+        @Bean
+        AuthenticationProvider authenticationProvider() {
+            final AuthenticationProvider provider = mock(AuthenticationProvider.class);
+            when(provider.getId()).thenReturn("administrator");
+            when(provider.getAuthorities()).thenReturn(Set.of(new SimpleGrantedAuthority("ROLE_Administrator")));
+            return provider;
         }
 
         @Bean
@@ -154,9 +168,9 @@ class CaretakerRestIntegrationTest {
         @Bean
         CaretakerServiceFacade caretakerServiceFacade(CaretakerService caretakerService,
                 CaretakerMapper caretakerMapper, OrganizationService organizationService,
-                DepartmentService departmentService) {
+                DepartmentService departmentService, AuthenticationProvider authenticationProvider) {
             return new CaretakerServiceFacade(caretakerService, caretakerMapper, organizationService,
-                    departmentService);
+                    departmentService, authenticationProvider);
         }
     }
 

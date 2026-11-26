@@ -61,6 +61,14 @@ public class SecurityConfig {
             // patient form) stays open to any authenticated caller.
             .requestMatchers(HttpMethod.POST, "/api/v1/departments").hasRole(AdminRoles.ADMINISTRATOR)
             .requestMatchers(HttpMethod.PUT, "/api/v1/departments/*").hasRole(AdminRoles.ADMINISTRATOR)
+            // Caretakers are listed and created by administrators only. Reading or updating one
+            // is for the caretaker themself or an administrator (CaretakerServiceFacade).
+            .requestMatchers(HttpMethod.GET, "/api/v1/caretakers").hasRole(AdminRoles.ADMINISTRATOR)
+            .requestMatchers(HttpMethod.POST, "/api/v1/caretakers").hasRole(AdminRoles.ADMINISTRATOR)
+            // Measurement types are created and changed by administrators only; reading them stays
+            // open to any authenticated caller.
+            .requestMatchers(HttpMethod.POST, "/api/v1/measurements").hasRole(AdminRoles.ADMINISTRATOR)
+            .requestMatchers(HttpMethod.PUT, "/api/v1/measurements/*").hasRole(AdminRoles.ADMINISTRATOR)
             // Service-to-service calls from the mobile backend (e.g. the language a patient picked
             // in the app), made with its own service account's token.
             .requestMatchers("/api/v1/internal/**").hasRole(AdminRoles.MOBILE_SERVICE)
