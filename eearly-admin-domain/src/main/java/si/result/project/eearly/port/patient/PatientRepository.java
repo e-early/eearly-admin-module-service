@@ -15,6 +15,8 @@ public interface PatientRepository {
 
     Optional<Patient> findById(final UUID id);
 
+    Optional<Patient> findByKeycloakId(final UUID keycloakId);
+
     Patient findByHealthInsuranceId(final String healthInsuranceId);
 
     Page<Patient> findAll(final Specification<Patient> specification, final Pageable pageable);

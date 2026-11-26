@@ -20,11 +20,11 @@ public class UpdatePatientCommand extends CreatePatientCommand {
     public UpdatePatientCommand(UUID id, String firstName, String lastName, LocalDate dateOfBirth,
                                 GenderType gender, String healthInsuranceId, String street,
                                 String city, String state, Integer zip, String country,
-                                String email, String phoneNumber, List<Caretaker> caretakers,
+                                String email, String phoneNumber, String language, List<Caretaker> caretakers,
                                 List<Measurement> measurements,
                                 List<Algorithm> algorithms) {
         super(firstName, lastName, dateOfBirth, gender, healthInsuranceId, street,
-                city, state, zip, country, email, phoneNumber,
+                city, state, zip, country, email, phoneNumber, language,
                 caretakers, measurements, algorithms);
         this.id = id;
     }

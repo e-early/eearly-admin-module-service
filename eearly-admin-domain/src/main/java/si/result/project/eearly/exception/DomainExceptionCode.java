@@ -33,6 +33,7 @@ public enum DomainExceptionCode implements ExceptionCode {
   PATIENT_EMAIL_FOUND("Patient email is already in the system", ExceptionReason.ILLEGAL_ARGUMENT),
   PATIENT_PHONE_NUMBER_NULL("Patient city is null", ExceptionReason.ILLEGAL_ARGUMENT),
   PATIENT_PHONE_NUMBER_TOO_LONG("Patient city is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  PATIENT_LANGUAGE_UNSUPPORTED("Patient language is not supported", ExceptionReason.ILLEGAL_ARGUMENT),
 
   CARETAKER_ID_NULL("Caretaker ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_NOT_FOUND("Caretaker not found", ExceptionReason.ENTITY_NOT_FOUND),

@@ -50,6 +50,9 @@ public record PatientDTO(
     @Schema(example = "1234567890")
     String phoneNumber,
 
+    @Schema(example = "sl", allowableValues = {"sl", "en"})
+    String language,
+
     List<MeasurementLiteDTO> measurements,
 
     List<AlgorithmLiteDTO> algorithms

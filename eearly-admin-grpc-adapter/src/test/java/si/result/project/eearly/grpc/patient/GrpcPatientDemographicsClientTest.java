@@ -87,12 +87,13 @@ class GrpcPatientDemographicsClientTest {
                     }
                 }, authorization, "test-token");
 
-        client.upsertDemographics(keycloakId, LocalDate.of(2002, 3, 11), GenderType.FEMALE);
+        client.upsertDemographics(keycloakId, LocalDate.of(2002, 3, 11), GenderType.FEMALE, "en");
 
         assertThat(authorization.get()).isEqualTo("Bearer test-token");
         assertThat(received.get().getUserId()).isEqualTo(keycloakId.toString());
         assertThat(received.get().getDateOfBirth()).isEqualTo("2002-03-11");
         assertThat(received.get().getSex()).isEqualTo(Sex.FEMALE);
+        assertThat(received.get().getLanguage()).isEqualTo("en");
     }
 
     @Test
@@ -107,29 +108,31 @@ class GrpcPatientDemographicsClientTest {
                     }
                 }, authorization, "test-token");
 
-        assertThatThrownBy(() -> client.upsertDemographics(UUID.randomUUID(), LocalDate.of(2002, 3, 11), GenderType.MALE))
+        assertThatThrownBy(() -> client.upsertDemographics(UUID.randomUUID(), LocalDate.of(2002, 3, 11), GenderType.MALE, "sl"))
                 .isInstanceOf(StatusRuntimeException.class);
     }
 
     @Test
-    void requestCarriesTheKeycloakIdAndAnIsoDateOfBirth() {
+    void requestCarriesTheKeycloakIdAnIsoDateOfBirthAndTheLanguage() {
         UUID keycloakId = UUID.fromString("50287036-1b84-4e2e-831f-91ab621e52d9");
 
         UpsertPatientDemographicsRequest request = GrpcPatientDemographicsClient.toRequest(
-                keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE);
+                keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE, "en");
 
         assertThat(request.getUserId()).isEqualTo("50287036-1b84-4e2e-831f-91ab621e52d9");
         assertThat(request.getDateOfBirth()).isEqualTo("2002-03-11");
         assertThat(request.getSex()).isEqualTo(Sex.MALE);
+        assertThat(request.getLanguage()).isEqualTo("en");
     }
 
     @Test
     void missingValuesAreSentAsUnset() {
         UpsertPatientDemographicsRequest request = GrpcPatientDemographicsClient.toRequest(
-                UUID.randomUUID(), null, null);
+                UUID.randomUUID(), null, null, null);
 
         assertThat(request.getDateOfBirth()).isEmpty();
         assertThat(request.getSex()).isEqualTo(Sex.UNKNOWN_SEX);
+        assertThat(request.getLanguage()).isEmpty();
     }
 
     @ParameterizedTest

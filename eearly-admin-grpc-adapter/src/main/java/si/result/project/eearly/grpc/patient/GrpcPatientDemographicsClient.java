@@ -32,13 +32,13 @@ public class GrpcPatientDemographicsClient implements PatientDemographicsClient 
     private final ClientInterceptor grpcAuthInterceptor;
 
     @Override
-    public void upsertDemographics(UUID keycloakId, LocalDate dateOfBirth, GenderType gender) {
+    public void upsertDemographics(UUID keycloakId, LocalDate dateOfBirth, GenderType gender, String language) {
         ManagedChannel managedChannel = channelFactory.createChannel("mobile-backend");
         try {
             Channel channel = ClientInterceptors.intercept(managedChannel, grpcAuthInterceptor);
             BackofficePatientServiceGrpc.newBlockingStub(channel)
                     .withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
-                    .upsertPatientDemographics(toRequest(keycloakId, dateOfBirth, gender));
+                    .upsertPatientDemographics(toRequest(keycloakId, dateOfBirth, gender, language));
             log.debug("Synced demographics of patient {} to the mobile backend", keycloakId);
         } finally {
             shutdownChannel(managedChannel);
@@ -46,12 +46,15 @@ public class GrpcPatientDemographicsClient implements PatientDemographicsClient 
     }
 
     static UpsertPatientDemographicsRequest toRequest(
-            UUID keycloakId, LocalDate dateOfBirth, GenderType gender) {
+            UUID keycloakId, LocalDate dateOfBirth, GenderType gender, String language) {
         UpsertPatientDemographicsRequest.Builder request = UpsertPatientDemographicsRequest.newBuilder()
                 .setUserId(keycloakId.toString())
                 .setSex(toSex(gender));
         if (dateOfBirth != null) {
             request.setDateOfBirth(dateOfBirth.toString());
+        }
+        if (language != null) {
+            request.setLanguage(language);
         }
         return request.build();
     }

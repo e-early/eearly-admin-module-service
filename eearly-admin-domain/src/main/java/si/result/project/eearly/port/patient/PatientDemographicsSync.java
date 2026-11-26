@@ -11,8 +11,8 @@ import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.model.patient.Patient_;
 
 /**
- * Keeps the mobile backend's copy of each patient's date of birth and gender in step with the
- * admin service's.
+ * Keeps the mobile backend's copy of each patient's date of birth, gender and language in step
+ * with the admin service's.
  *
  * <p>Best effort: a failed sync is logged rather than failing the patient's create or update, and
  * {@link #syncAll()} (run once on startup by {@link PatientDemographicsStartupSync}) sends every
@@ -37,7 +37,7 @@ public class PatientDemographicsSync {
         }
         try {
             patientDemographicsClient.upsertDemographics(
-                    patient.getKeycloakId(), patient.getDateOfBirth(), patient.getGender());
+                    patient.getKeycloakId(), patient.getDateOfBirth(), patient.getGender(), patient.getLanguage());
             return true;
         } catch (RuntimeException e) {
             log.warn("Could not sync demographics of patient {} to the mobile backend: {}",

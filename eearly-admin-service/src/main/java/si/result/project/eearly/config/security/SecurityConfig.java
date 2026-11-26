@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import si.result.project.eearly.auth.AdminRoles;
 import si.result.spring.boot.bricks.auth.jwt.JwtConverter;
 
 @Profile(value = {"!unrestricted"})
@@ -27,6 +28,9 @@ public class SecurityConfig {
 
   @Value("${spring.security.cors.allowed-methods}")
   private List<String> allowedMethods;
+
+  @Value("${admin.keycloak.ui-client-id}")
+  private String uiClientId;
 
   private final List<String> allowedHeaders = List.of("Authorization",
           "Content-Type",
@@ -49,12 +53,23 @@ public class SecurityConfig {
             .requestMatchers("/v3/api-docs/swagger-config").permitAll()
             .requestMatchers("/v3/api-docs").permitAll()
             .requestMatchers("/api/v1/mobile/*").permitAll()
+            // Service-to-service calls from the mobile backend (e.g. the language a patient picked
+            // in the app), made with its own service account's token.
+            .requestMatchers("/api/v1/internal/**").hasRole(AdminRoles.MOBILE_SERVICE)
             .anyRequest().authenticated());
     http.csrf(AbstractHttpConfigurer::disable);
     http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
     http.oauth2ResourceServer(resourceServer -> resourceServer.jwt(
-        conf -> conf.jwtAuthenticationConverter(new JwtConverter())));
+        conf -> conf.jwtAuthenticationConverter(jwtConverter(uiClientId))));
     return http.build();
+  }
+
+  /**
+   * Roles are client roles of the configured Keycloak client, in
+   * resource_access.&lt;client id&gt;.roles, not realm roles (JwtConverter's default).
+   */
+  static JwtConverter jwtConverter(final String uiClientId) {
+    return new JwtConverter("sub", "resource_access." + uiClientId + ".roles", "ROLE_");
   }
 
   private UrlBasedCorsConfigurationSource corsConfigurationSource() {
