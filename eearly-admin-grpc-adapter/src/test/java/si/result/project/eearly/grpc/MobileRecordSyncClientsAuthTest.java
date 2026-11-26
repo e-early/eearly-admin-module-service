@@ -23,16 +23,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import si.result.eearly.genproto.CaretakerServiceGrpc;
+import si.result.eearly.genproto.FacilityServiceGrpc;
 import si.result.eearly.genproto.UpsertCaretakerRequest;
 import si.result.eearly.genproto.UpsertCaretakerResponse;
+import si.result.eearly.genproto.UpsertFacilityRequest;
+import si.result.eearly.genproto.UpsertFacilityResponse;
 import si.result.project.eearly.grpc.caretaker.GrpcCaretakerClient;
 import si.result.project.eearly.grpc.config.GrpcClientAuthConfig;
+import si.result.project.eearly.grpc.facility.GrpcFacilityClient;
 import si.result.project.eearly.model.caretaker.Caretaker;
+import si.result.project.eearly.model.organization.Organization;
 import si.result.project.eearly.port.mobile.MobileKeycloakService;
 
 /**
- * The mobile service accepts UpsertCaretaker only from the admin service client, so the call must
- * carry the admin service's access token. A local gRPC server records the Authorization header that
+ * The mobile service accepts UpsertFacility and UpsertCaretaker only from the admin service client,
+ * so both calls must carry the admin service's access token. A local gRPC server records the Authorization header that
  * actually arrives.
  */
 class MobileRecordSyncClientsAuthTest {
@@ -47,7 +52,9 @@ class MobileRecordSyncClientsAuthTest {
     private final GrpcChannelFactory channelFactory = mock(GrpcChannelFactory.class);
     private Server server;
 
+    private GrpcFacilityClient facilityClient;
     private GrpcCaretakerClient caretakerClient;
+    private Organization organization;
     private Caretaker caretaker;
 
     @BeforeEach
@@ -62,6 +69,14 @@ class MobileRecordSyncClientsAuthTest {
             }
         };
         server = NettyServerBuilder.forPort(0)
+                .addService(ServerInterceptors.intercept(new FacilityServiceGrpc.FacilityServiceImplBase() {
+                    @Override
+                    public void upsertFacility(UpsertFacilityRequest request,
+                            StreamObserver<UpsertFacilityResponse> observer) {
+                        observer.onNext(UpsertFacilityResponse.getDefaultInstance());
+                        observer.onCompleted();
+                    }
+                }, recordAuthorization))
                 .addService(ServerInterceptors.intercept(new CaretakerServiceGrpc.CaretakerServiceImplBase() {
                     @Override
                     public void upsertCaretaker(UpsertCaretakerRequest request,
@@ -77,8 +92,12 @@ class MobileRecordSyncClientsAuthTest {
                 ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build());
 
         var authInterceptor = new GrpcClientAuthConfig(keycloak).grpcAuthInterceptor();
+        facilityClient = new GrpcFacilityClient(channelFactory, authInterceptor);
         caretakerClient = new GrpcCaretakerClient(channelFactory, authInterceptor);
 
+        organization = mock(Organization.class);
+        when(organization.getId()).thenReturn(UUID.randomUUID());
+        when(organization.getName()).thenReturn("Test Organization");
         caretaker = mock(Caretaker.class);
         when(caretaker.getId()).thenReturn(UUID.randomUUID());
         when(caretaker.getFirstName()).thenReturn("Test");
@@ -88,6 +107,16 @@ class MobileRecordSyncClientsAuthTest {
     @AfterEach
     void tearDown() throws Exception {
         server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void upsertFacilitySendsTheAdminServiceToken() throws Exception {
+        when(keycloak.getAccessTokenForClient()).thenReturn(TEST_TOKEN);
+
+        facilityClient.upsertFacility(organization);
+
+        assertThat(receivedAuthorization.poll(5, TimeUnit.SECONDS))
+                .isEqualTo("Bearer " + TEST_TOKEN);
     }
 
     @Test
@@ -104,6 +133,7 @@ class MobileRecordSyncClientsAuthTest {
     void missingTokenIsLoggedAndDoesNotBreakTheCaller() throws Exception {
         when(keycloak.getAccessTokenForClient()).thenThrow(new IllegalStateException("Token service unavailable"));
 
+        assertThatCode(() -> facilityClient.upsertFacility(organization)).doesNotThrowAnyException();
         assertThatCode(() -> caretakerClient.upsertCaretaker(caretaker)).doesNotThrowAnyException();
         // Nothing is sent without a token.
         assertThat(receivedAuthorization.poll(500, TimeUnit.MILLISECONDS)).isNull();

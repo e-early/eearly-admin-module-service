@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "FacilityProto";
+
+import "responseError.proto";
+
+service FacilityService {
+  rpc GetFacilities(GetFacilitiesRequestEmpty) returns (GetFacilitiesResponse) {}
+  rpc UpsertFacility (UpsertFacilityRequest) returns (UpsertFacilityResponse) {}
+}
+
+message GetFacilitiesRequestEmpty {}
+
+message GetFacilitiesResponse {
+  repeated Facility facilities = 1;
+}
+
+message UpsertFacilityRequest {
+  Facility facility = 1;
+}
+
+message UpsertFacilityResponse {
+  Error error = 1;
+}
+
+message Facility {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}

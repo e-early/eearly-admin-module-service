@@ -6,6 +6,9 @@ package si.result.project.eearly.auth;
  */
 public final class AdminRoles {
 
+    /** Administration (organizations). */
+    public static final String ADMINISTRATOR = "Administrator";
+
     /**
      * The mobile backend's service account, for {@code /api/v1/internal/**}. A client role of the
      * configured client, assigned to the mobile backend's Keycloak client's service account.
