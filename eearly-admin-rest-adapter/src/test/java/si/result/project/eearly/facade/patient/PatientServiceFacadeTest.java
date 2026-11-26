@@ -31,6 +31,7 @@ import si.result.project.eearly.port.caretaker.CaretakerService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.mobile.MobileKeycloakService;
 import si.result.project.eearly.port.mobile.MobileServiceService;
+import si.result.project.eearly.port.patient.PatientDemographicsSync;
 import si.result.project.eearly.port.patient.PatientMeasurementClient;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.rest.filter.Filter;
@@ -65,6 +66,8 @@ class PatientServiceFacadeTest {
     private MobileKeycloakService mobileKeycloakService;
     @Mock
     private MobileServiceService mobileServiceService;
+    @Mock
+    private PatientDemographicsSync patientDemographicsSync;
 
     @InjectMocks
     private PatientServiceFacade patientServiceFacade;
@@ -250,6 +253,8 @@ class PatientServiceFacadeTest {
             verify(algorithmService).findAllById(algorithmIds);
             verify(patientService).create(any());
             verify(patientService).updateKeycloakId(testId, testKeycloakId);
+            // Synced once the patient has a mobile account, with the saved patient.
+            verify(patientDemographicsSync).sync(testPatient);
         }
 
         @Test
@@ -355,6 +360,7 @@ class PatientServiceFacadeTest {
             verify(measurementService).findAllById(measurementIds);
             verify(algorithmService).findAllById(algorithmIds);
             verify(patientService).update(any());
+            verify(patientDemographicsSync).sync(testPatient);
             verify(patientMapper).toMinimalDTO(testPatient);
         }
     }
