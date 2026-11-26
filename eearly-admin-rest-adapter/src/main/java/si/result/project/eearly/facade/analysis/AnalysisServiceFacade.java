@@ -31,6 +31,7 @@ import si.result.project.eearly.mapper.analysis.DetectionBoxDataMapper;
 import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.analysis.AnalysisDetectionBox;
 import si.result.project.eearly.model.analysis.AnalysisState;
+import si.result.project.eearly.model.analysis.AnalysisTriggerType;
 import si.result.project.eearly.model.analysis.FeedbackState;
 import si.result.project.eearly.model.analysis.command.CreateAnalysisCommand;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
@@ -112,7 +113,8 @@ public class AnalysisServiceFacade {
                 patient,
                 algorithm,
                 selections,
-                chartDisplayOptionsJson
+                chartDisplayOptionsJson,
+                AnalysisTriggerType.MANUAL
         );
 
         final var analysis = analysisService.create(command);

@@ -134,4 +134,19 @@ class AlgorithmExecutionTest {
 
         assertThat(created.getInputParameters()).isEqualTo("{\"from\":\"analysis\"}");
     }
+
+    @Test
+    void create_setsTriggerTypeFromCommand() {
+        final CreateAlgorithmExecutionCommand command = new CreateAlgorithmExecutionCommand(
+                mock(Algorithm.class),
+                mock(Patient.class),
+                null,
+                AlgorithmExecutionTriggerType.MANUAL,
+                "[]"
+        );
+
+        final AlgorithmExecution created = AlgorithmExecution.create(command);
+
+        assertThat(created.getTriggerType()).isEqualTo(AlgorithmExecutionTriggerType.MANUAL);
+    }
 }

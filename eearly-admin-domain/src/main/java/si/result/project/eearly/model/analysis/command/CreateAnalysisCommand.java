@@ -7,6 +7,7 @@ import java.util.List;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.analysis.AnalysisSelection;
 import si.result.project.eearly.model.analysis.AnalysisState;
+import si.result.project.eearly.model.analysis.AnalysisTriggerType;
 import si.result.project.eearly.model.analysis.FeedbackState;
 import si.result.project.eearly.model.patient.Patient;
 
@@ -30,5 +31,7 @@ public class CreateAnalysisCommand {
     private final List<AnalysisSelection> inputParameters;
 
     private final String chartDisplayOptions;
+
+    private final AnalysisTriggerType triggerType;
 
 }
