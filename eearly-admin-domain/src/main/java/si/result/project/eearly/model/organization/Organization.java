@@ -11,6 +11,7 @@ import lombok.Getter;
 import org.hibernate.annotations.UuidGenerator;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.auditable.Auditable;
+import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.department.Department;
 import si.result.project.eearly.model.organization.command.CreateOrganizationCommand;
 import si.result.project.eearly.model.organization.command.UpdateOrganizationCommand;
@@ -35,6 +36,10 @@ public class Organization extends Auditable {
     /** Inverse side of {@link Department#getOrganization()}; departments are managed through their own endpoints. */
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "organization")
     private List<Department> departments;
+
+    /** Inverse side of {@link Caretaker#getOrganization()}; caretakers are managed through their own endpoints. */
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "organization")
+    private List<Caretaker> caretakers;
 
     protected Organization() {}
 

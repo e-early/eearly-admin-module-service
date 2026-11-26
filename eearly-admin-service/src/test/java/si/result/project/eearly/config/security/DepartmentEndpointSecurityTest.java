@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nimbusds.jwt.JWTClaimsSet;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -83,7 +84,7 @@ class DepartmentEndpointSecurityTest {
 
         var lite = new DepartmentLiteDTO(ID, "Test Department");
         when(facade.getById(ID)).thenReturn(new DepartmentDTO(ID, "Test Department",
-                new OrganizationLiteDTO(ORGANIZATION_ID, "Test Organization")));
+                new OrganizationLiteDTO(ORGANIZATION_ID, "Test Organization"), List.of()));
         when(facade.create(any())).thenReturn(lite);
         when(facade.update(any(), any())).thenReturn(lite);
     }

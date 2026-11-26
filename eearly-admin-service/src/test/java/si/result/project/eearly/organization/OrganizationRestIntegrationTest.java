@@ -207,13 +207,13 @@ class OrganizationRestIntegrationTest {
     @Test
     void updateWithDepartmentListRenamesOnlyAndLeavesDepartmentsUntouched() {
         final UUID id = organizationService.create(organizationMapper.toCreateCommand(
-                new OrganizationUpsertDTO(null, "Test Organization", null))).getId();
+                new OrganizationUpsertDTO(null, "Test Organization", null, null))).getId();
         final UUID departmentId = insertDepartment(id, "Test Department");
         final long versionBefore = jdbc.queryForObject("SELECT version FROM t_department WHERE id = ?", Long.class, departmentId);
 
         final OrganizationUpsertDTO dto = new OrganizationUpsertDTO(null, "Renamed Organization", List.of(
                 new DepartmentLiteDTO(departmentId, "Changed Department"),
-                new DepartmentLiteDTO(null, "New Test Department")));
+                new DepartmentLiteDTO(null, "New Test Department")), null);
         final OrganizationUpsertDTO result = new TransactionTemplate(transactionManager).execute(status ->
                 organizationMapper.toUpsertDTO(organizationService.update(organizationMapper.toUpdateCommand(id, dto))));
 

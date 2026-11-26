@@ -32,6 +32,7 @@ import si.result.project.eearly.grpc.caretaker.GrpcCaretakerClient;
 import si.result.project.eearly.grpc.config.GrpcClientAuthConfig;
 import si.result.project.eearly.grpc.facility.GrpcFacilityClient;
 import si.result.project.eearly.model.caretaker.Caretaker;
+import si.result.project.eearly.model.department.Department;
 import si.result.project.eearly.model.organization.Organization;
 import si.result.project.eearly.port.mobile.MobileKeycloakService;
 
@@ -48,6 +49,7 @@ class MobileRecordSyncClientsAuthTest {
             Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER);
 
     private final BlockingQueue<String> receivedAuthorization = new LinkedBlockingQueue<>();
+    private final BlockingQueue<UpsertCaretakerRequest> receivedCaretakerRequests = new LinkedBlockingQueue<>();
     private final MobileKeycloakService keycloak = mock(MobileKeycloakService.class);
     private final GrpcChannelFactory channelFactory = mock(GrpcChannelFactory.class);
     private Server server;
@@ -56,6 +58,7 @@ class MobileRecordSyncClientsAuthTest {
     private GrpcCaretakerClient caretakerClient;
     private Organization organization;
     private Caretaker caretaker;
+    private Department department;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -81,6 +84,7 @@ class MobileRecordSyncClientsAuthTest {
                     @Override
                     public void upsertCaretaker(UpsertCaretakerRequest request,
                             StreamObserver<UpsertCaretakerResponse> observer) {
+                        receivedCaretakerRequests.add(request);
                         observer.onNext(UpsertCaretakerResponse.getDefaultInstance());
                         observer.onCompleted();
                     }
@@ -102,6 +106,10 @@ class MobileRecordSyncClientsAuthTest {
         when(caretaker.getId()).thenReturn(UUID.randomUUID());
         when(caretaker.getFirstName()).thenReturn("Test");
         when(caretaker.getLastName()).thenReturn("Caretaker");
+        department = mock(Department.class);
+        when(department.getId()).thenReturn(UUID.randomUUID());
+        when(caretaker.getOrganization()).thenReturn(organization);
+        when(caretaker.getDepartment()).thenReturn(department);
     }
 
     @AfterEach
@@ -127,6 +135,22 @@ class MobileRecordSyncClientsAuthTest {
 
         assertThat(receivedAuthorization.poll(5, TimeUnit.SECONDS))
                 .isEqualTo("Bearer " + TEST_TOKEN);
+    }
+
+    @Test
+    void upsertCaretakerCarriesTheOrganizationAsFacilityWithTheAdminServiceToken() throws Exception {
+        when(keycloak.getAccessTokenForClient()).thenReturn(TEST_TOKEN);
+
+        caretakerClient.upsertCaretaker(caretaker);
+
+        assertThat(receivedAuthorization.poll(5, TimeUnit.SECONDS)).isEqualTo("Bearer " + TEST_TOKEN);
+        UpsertCaretakerRequest request = receivedCaretakerRequests.poll(5, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        // The caretaker message of the mobile service has the organization (its facility) but no department.
+        assertThat(request.getCaretaker().getId()).isEqualTo(caretaker.getId().toString());
+        assertThat(request.getCaretaker().getName()).isEqualTo("Test Caretaker");
+        assertThat(request.getCaretaker().getFacilityId()).isEqualTo(organization.getId().toString());
+        assertThat(request.getCaretaker().getFacilityId()).isNotEqualTo(department.getId().toString());
     }
 
     @Test

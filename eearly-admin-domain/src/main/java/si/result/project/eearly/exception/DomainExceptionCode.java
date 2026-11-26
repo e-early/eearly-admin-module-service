@@ -43,6 +43,8 @@ public enum DomainExceptionCode implements ExceptionCode {
   CARETAKER_LASTNAME_TOO_LONG("Caretaker last name is too long", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_EMAIL_NULL("Caretaker email is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_LANGUAGE_NULL("Caretaker language is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  CARETAKER_ORGANIZATION_NULL("Caretaker organization is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  CARETAKER_DEPARTMENT_NULL("Caretaker department is null", ExceptionReason.ILLEGAL_ARGUMENT),
 
   ORGANIZATION_NOT_FOUND("Organization not found", ExceptionReason.ENTITY_NOT_FOUND),
   ORGANIZATION_NAME_NULL("Organization name is null", ExceptionReason.ILLEGAL_ARGUMENT),
