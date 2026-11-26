@@ -22,6 +22,7 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
@@ -40,6 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import si.result.project.eearly.dao.organization.OrganizationDAO;
 import si.result.project.eearly.facade.organization.OrganizationServiceFacade;
 import si.result.project.eearly.mapper.organization.OrganizationMapperImpl;
+import si.result.project.eearly.mapper.organization.OrganizationMapper;
 import si.result.project.eearly.model.organization.Organization;
 import si.result.project.eearly.port.organization.OrganizationClient;
 import si.result.project.eearly.port.organization.OrganizationService;
@@ -70,6 +72,29 @@ class OrganizationRestIntegrationTest {
     @EntityScan(basePackages = "si.result.project.eearly.model")
     @EnableJpaRepositories(basePackages = "si.result.project.eearly.dao")
     static class Cfg {
+
+        @Bean
+        OrganizationClient organizationClient() {
+            return mock(OrganizationClient.class);
+        }
+
+        @Bean
+        OrganizationMapper organizationMapper() {
+            return new OrganizationMapperImpl();
+        }
+
+        @Bean
+        OrganizationService organizationService(OrganizationDAO organizationDAO, OrganizationClient organizationClient) {
+            return new OrganizationService(organizationDAO, organizationClient);
+        }
+
+        // A Spring-managed facade, so that its transactional methods keep the session open while the
+        // lazily loaded departments are mapped (as in the running service).
+        @Bean
+        OrganizationServiceFacade organizationServiceFacade(OrganizationService organizationService,
+                OrganizationMapper organizationMapper) {
+            return new OrganizationServiceFacade(organizationService, organizationMapper);
+        }
     }
 
     @Container
@@ -88,12 +113,13 @@ class OrganizationRestIntegrationTest {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Autowired
-    private OrganizationDAO organizationDAO;
+    private OrganizationServiceFacade facade;
 
     @Autowired
     private JdbcTemplate jdbc;
 
-    private final OrganizationClient organizationClient = mock(OrganizationClient.class);
+    @Autowired
+    private OrganizationClient organizationClient;
 
     private MockMvc mvc;
 
@@ -101,8 +127,6 @@ class OrganizationRestIntegrationTest {
     void setUp() {
         jdbc.update("DELETE FROM t_organization");
         reset(organizationClient);
-        final var facade = new OrganizationServiceFacade(
-                new OrganizationService(organizationDAO, organizationClient), new OrganizationMapperImpl());
         mvc = MockMvcBuilders.standaloneSetup(new OrganizationController(facade))
                 .setCustomArgumentResolvers(new RestFilterArgumentResolver(), new PageableHandlerMethodArgumentResolver())
                 .setControllerAdvice(new ErrorResponseHandler())
