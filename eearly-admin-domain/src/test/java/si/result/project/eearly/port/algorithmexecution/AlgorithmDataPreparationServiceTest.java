@@ -627,13 +627,16 @@ class AlgorithmDataPreparationServiceTest {
         assertEquals("2026-02-12T07:01:20Z", json.path("dateRange").path("to").asText());
         assertEquals(3, json.path("measurements").size());
         assertEquals("HEART_RATE", json.path("measurements").get(0).path("type").asText());
-        assertEquals(4, json.path("measurements").get(0).path("records").size());
+        // Core keeps one record per timestamp (the hosted model needs strictly increasing
+        // timestamps), so the two heart-rate records at 08:00:01 become one.
+        assertEquals(3, json.path("measurements").get(0).path("records").size());
         assertEquals("2026-02-12T07:00:01Z",
                 json.path("measurements").get(0).path("records").get(1).path("timestamp").asText());
-        assertEquals("2026-02-12T07:00:01Z",
-                json.path("measurements").get(0).path("records").get(2).path("timestamp").asText());
         assertEquals(74.0,
-                json.path("measurements").get(0).path("records").get(2).path("value").path("value").asDouble());
+                json.path("measurements").get(0).path("records").get(1).path("value").path("value").asDouble(),
+                "the later of the two 08:00:01 records is kept");
+        assertEquals("2026-02-12T07:00:07Z",
+                json.path("measurements").get(0).path("records").get(2).path("timestamp").asText());
         assertEquals("APNEA_LABELS", json.path("measurements").get(2).path("type").asText());
         assertTrue(json.path("measurements").get(2).path("records").get(0).path("value").isObject());
     }
@@ -829,13 +832,16 @@ class AlgorithmDataPreparationServiceTest {
 
         assertEquals("Heart rate", json.path("measurements").get(0).path("name").asText());
         assertEquals("/min", json.path("measurements").get(0).path("unit").asText());
-        assertEquals(6, json.path("measurements").get(0).path("dataPoints").size());
+        // Core keeps one record per timestamp (the hosted model needs strictly increasing
+        // timestamps), so records sharing a timestamp become one.
+        assertEquals(5, json.path("measurements").get(0).path("dataPoints").size());
         assertEquals("2026-02-12T08:00:01+01:00",
                 json.path("measurements").get(0).path("dataPoints").get(1).path("timestamp").asText());
-        assertEquals("2026-02-12T08:00:01+01:00",
-                json.path("measurements").get(0).path("dataPoints").get(2).path("timestamp").asText());
         assertEquals(74.0,
-                json.path("measurements").get(0).path("dataPoints").get(2).path("value").asDouble());
+                json.path("measurements").get(0).path("dataPoints").get(1).path("value").asDouble(),
+                "the later of the two 08:00:01 records is kept");
+        assertEquals("2026-02-12T08:00:02+01:00",
+                json.path("measurements").get(0).path("dataPoints").get(2).path("timestamp").asText());
 
         assertEquals("Blood oxygen saturation", json.path("measurements").get(1).path("name").asText());
         assertEquals("%", json.path("measurements").get(1).path("unit").asText());

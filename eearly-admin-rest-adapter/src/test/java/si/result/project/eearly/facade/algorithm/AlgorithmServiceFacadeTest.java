@@ -209,7 +209,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -265,7 +265,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -301,7 +301,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -337,7 +337,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -375,7 +375,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -413,7 +413,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -451,7 +451,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -489,7 +489,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
@@ -527,7 +527,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
-                    List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));

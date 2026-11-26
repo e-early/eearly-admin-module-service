@@ -215,7 +215,7 @@ class PatientServiceTest {
             "John", "Doe", LocalDate.of(1990, 1, 1), GenderType.MALE,
             "123456789", "Test Street", "Test City", "Test State", 1000,
             "Test Country", "john.doe@test.com", "+1234567890",
-            null, null, null, null, null
+            null, null, null
         );
     }
 
@@ -224,7 +224,7 @@ class PatientServiceTest {
             testId, "Jane", "Smith", LocalDate.of(1995, 5, 15), GenderType.FEMALE,
             "987654321", "Updated Street", "Updated City", "Updated State", 2000,
             "Updated Country", "jane.smith@test.com", "+0987654321",
-            null, null, null, null, null
+            null, null, null
         );
     }
 }
