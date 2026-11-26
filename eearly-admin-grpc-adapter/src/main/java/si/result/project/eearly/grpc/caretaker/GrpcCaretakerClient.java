@@ -41,7 +41,10 @@ public class GrpcCaretakerClient implements CaretakerClient {
         si.result.eearly.genproto.Caretaker protoCaretaker = si.result.eearly.genproto.Caretaker.newBuilder()
                 .setId(caretaker.getId().toString())
                 .setName(caretaker.getFirstName() + " " + caretaker.getLastName())
-                .setFacilityId("")
+                // The mobile service knows the caretaker's organization as its facility. The department
+                // is not part of the caretaker message.
+                .setFacilityId(caretaker.getOrganization() == null
+                        ? "" : caretaker.getOrganization().getId().toString())
                 .build();
 
         UpsertCaretakerRequest request = UpsertCaretakerRequest.newBuilder()

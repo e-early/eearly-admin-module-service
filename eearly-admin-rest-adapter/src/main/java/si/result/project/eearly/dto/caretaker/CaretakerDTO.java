@@ -1,6 +1,8 @@
 package si.result.project.eearly.dto.caretaker;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import si.result.project.eearly.dto.department.DepartmentLiteDTO;
+import si.result.project.eearly.dto.organization.OrganizationLiteDTO;
 
 import java.util.UUID;
 
@@ -23,6 +25,10 @@ public record CaretakerDTO(
         String email,
 
         @Schema(example = "sl")
-        String language
+        String language,
+
+        OrganizationLiteDTO organization,
+
+        DepartmentLiteDTO department
 
 ) {}

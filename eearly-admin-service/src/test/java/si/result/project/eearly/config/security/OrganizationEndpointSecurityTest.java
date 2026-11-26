@@ -80,8 +80,8 @@ class OrganizationEndpointSecurityTest {
         token("no-roles-token", "nobody", "{}");
         when(jwtDecoder.decode("invalid")).thenThrow(new BadJwtException("invalid"));
 
-        when(facade.getById(ID)).thenReturn(new OrganizationDTO(ID, "Test Organization", List.of()));
-        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization", null));
+        when(facade.getById(ID)).thenReturn(new OrganizationDTO(ID, "Test Organization", List.of(), List.of()));
+        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization", null, null));
     }
 
     private void token(String value, String subject, String resourceAccess) throws Exception {

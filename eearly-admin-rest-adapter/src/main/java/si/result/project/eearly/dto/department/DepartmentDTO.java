@@ -1,8 +1,10 @@
 package si.result.project.eearly.dto.department;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import si.result.project.eearly.dto.caretaker.CaretakerLiteDTO;
 import si.result.project.eearly.dto.organization.OrganizationLiteDTO;
 
+import java.util.List;
 import java.util.UUID;
 
 public record DepartmentDTO(
@@ -13,6 +15,8 @@ public record DepartmentDTO(
         @Schema(example = "Test Department")
         String name,
 
-        OrganizationLiteDTO organization
+        OrganizationLiteDTO organization,
+
+        List<CaretakerLiteDTO> caretakers
 
 ) {}

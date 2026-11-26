@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import si.result.project.eearly.dto.caretaker.CaretakerLiteDTO;
 import si.result.project.eearly.dto.department.DepartmentLiteDTO;
 import si.result.project.eearly.dto.organization.OrganizationUpsertDTO;
 import si.result.project.eearly.model.organization.Organization;
@@ -16,7 +17,9 @@ class OrganizationMapperTest {
     private final OrganizationMapper mapper = new OrganizationMapperImpl();
 
     private final OrganizationUpsertDTO dto = new OrganizationUpsertDTO(null, "Test Organization",
-            List.of(new DepartmentLiteDTO(UUID.randomUUID(), "Test Department")));
+            List.of(new DepartmentLiteDTO(UUID.randomUUID(), "Test Department")),
+            List.of(new CaretakerLiteDTO(UUID.randomUUID(), UUID.randomUUID(), "Test", "Caretaker",
+                    "test@example.org", "sl")));
 
     @Test
     void commandsTakeTheNameAndIgnoreTheDepartmentList() {
@@ -39,5 +42,6 @@ class OrganizationMapperTest {
 
         assertThat(result.name()).isEqualTo("Test Organization");
         assertThat(result.departmentList()).isNull();
+        assertThat(result.caretakerList()).isNull();
     }
 }

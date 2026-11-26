@@ -18,9 +18,10 @@ public interface OrganizationMapper {
 
     OrganizationLiteDTO toLiteDTO(final Organization organization);
 
-    // Departments are stored through their own endpoints (t_department.id_organization), so the
-    // list is neither read from nor written to the organization here.
+    // Departments and caretakers are stored through their own endpoints (id_organization), so the
+    // lists are neither read from nor written to the organization here.
     @Mapping(target = "departmentList", ignore = true)
+    @Mapping(target = "caretakerList", ignore = true)
     OrganizationUpsertDTO toUpsertDTO(final Organization organization);
 
     @Mapping(target = "departments", ignore = true)
