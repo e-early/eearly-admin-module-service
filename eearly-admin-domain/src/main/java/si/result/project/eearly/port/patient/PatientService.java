@@ -6,11 +6,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.patient.Patient;
+import si.result.project.eearly.model.patient.PatientLanguage;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
 import si.result.project.eearly.model.patient.command.UpdatePatientCommand;
 import si.result.spring.boot.bricks.exception.DomainException;
+import si.result.spring.boot.bricks.validation.Condition;
 
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +57,23 @@ public class PatientService {
         final var patient = findById(command.getId());
         patient.update(command);
         log.debug("Patient updated with ID: {}", patient.getId());
+        return patientRepository.save(patient);
+    }
+
+    /**
+     * Sets the language a patient picked in the app. The mobile backend already has it, so this
+     * deliberately doesn't sync the patient back.
+     */
+    @Transactional
+    public Patient changeLanguage(final UUID keycloakId, final String language) {
+        Condition.check(PatientLanguage.isSupported(language), DomainExceptionCode.PATIENT_LANGUAGE_UNSUPPORTED);
+        final var patient = patientRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> {
+                    log.error("Patient with Keycloak ID {} not found", keycloakId);
+                    return new DomainException(DomainExceptionCode.PATIENT_NOT_FOUND);
+                });
+        log.info("Changing language of patient {} to {}", patient.getId(), language);
+        patient.changeLanguage(language);
         return patientRepository.save(patient);
     }
 

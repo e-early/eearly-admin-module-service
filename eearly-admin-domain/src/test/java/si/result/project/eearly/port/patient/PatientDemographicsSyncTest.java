@@ -40,22 +40,33 @@ class PatientDemographicsSyncTest {
         Patient patient = Patient.create(new CreatePatientCommand(
                 "Test", "1", dateOfBirth, gender,
                 "123456789", "Street", "City", "State", 1000,
-                "Country", "test@example.com", "+38640000000",
+                "Country", "test@example.com", "+38640000000", null,
                 null, null, null));
         patient.setKeycloakId(keycloakId);
         return patient;
     }
 
     @Test
-    void sync_sendsThePatientsDateOfBirthAndGender() {
+    void sync_sendsThePatientsDateOfBirthGenderAndLanguage() {
         UUID keycloakId = UUID.randomUUID();
+        Patient patient = patient(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE);
+        patient.changeLanguage("en");
 
-        boolean synced = patientDemographicsSync.sync(
-                patient(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE));
+        boolean synced = patientDemographicsSync.sync(patient);
 
         assertThat(synced).isTrue();
         verify(patientDemographicsClient)
-                .upsertDemographics(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE);
+                .upsertDemographics(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE, "en");
+    }
+
+    @Test
+    void sync_sendsSlovenianForAPatientWhoseLanguageWasNeverSet() {
+        UUID keycloakId = UUID.randomUUID();
+
+        patientDemographicsSync.sync(patient(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE));
+
+        verify(patientDemographicsClient)
+                .upsertDemographics(keycloakId, LocalDate.of(2002, 3, 11), GenderType.MALE, "sl");
     }
 
     @Test
@@ -71,7 +82,7 @@ class PatientDemographicsSyncTest {
     void sync_doesNotFailWhenTheMobileBackendCannotBeReached() {
         UUID keycloakId = UUID.randomUUID();
         doThrow(new RuntimeException("UNAVAILABLE")).when(patientDemographicsClient)
-                .upsertDemographics(any(), any(), any());
+                .upsertDemographics(any(), any(), any(), any());
 
         boolean synced = patientDemographicsSync.sync(
                 patient(keycloakId, LocalDate.of(2002, 3, 11), GenderType.FEMALE));
@@ -92,15 +103,15 @@ class PatientDemographicsSyncTest {
         // Lenient: the other patients' calls don't match this stub, and under strict stubbing that
         // would itself throw — which the sync would then count as a failure.
         lenient().doThrow(new RuntimeException("UNAVAILABLE")).when(patientDemographicsClient)
-                .upsertDemographics(failing.getKeycloakId(), failing.getDateOfBirth(), failing.getGender());
+                .upsertDemographics(failing.getKeycloakId(), failing.getDateOfBirth(), failing.getGender(), "sl");
 
         int synced = patientDemographicsSync.syncAll();
 
         assertThat(synced).isEqualTo(2);
         verify(patientDemographicsClient)
-                .upsertDemographics(first.getKeycloakId(), first.getDateOfBirth(), first.getGender());
+                .upsertDemographics(first.getKeycloakId(), first.getDateOfBirth(), first.getGender(), "sl");
         verify(patientDemographicsClient)
-                .upsertDemographics(last.getKeycloakId(), last.getDateOfBirth(), last.getGender());
+                .upsertDemographics(last.getKeycloakId(), last.getDateOfBirth(), last.getGender(), "sl");
     }
 
     @Test
@@ -110,6 +121,6 @@ class PatientDemographicsSyncTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
         assertThat(patientDemographicsSync.syncAll()).isZero();
-        verify(patientDemographicsClient, never()).upsertDemographics(any(), any(), any());
+        verify(patientDemographicsClient, never()).upsertDemographics(any(), any(), any(), any());
     }
 }

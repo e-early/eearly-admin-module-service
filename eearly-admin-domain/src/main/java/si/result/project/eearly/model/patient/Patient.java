@@ -77,6 +77,9 @@ public class Patient extends Auditable {
     @Column(name = "timezone", length = 64, nullable = false)
     private String timezone = "Europe/Ljubljana";
 
+    @Column(name = "language", length = 3, nullable = false)
+    private String language = PatientLanguage.DEFAULT;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "t_patient_caretaker",
@@ -120,6 +123,7 @@ public class Patient extends Auditable {
         patient.setCountry(command.getCountry());
         patient.setEmail(command.getEmail());
         patient.setPhoneNumber(command.getPhoneNumber());
+        patient.changeLanguage(command.getLanguage());
         patient.setCaretakers(command.getCaretakers());
         patient.setMeasurements(command.getMeasurements());
         patient.setAlgorithms(command.getAlgorithms());
@@ -140,6 +144,7 @@ public class Patient extends Auditable {
         setCountry(command.getCountry());
         setEmail(command.getEmail());
         setPhoneNumber(command.getPhoneNumber());
+        changeLanguage(command.getLanguage());
         setCaretakers(command.getCaretakers());
         setMeasurements(command.getMeasurements());
         setAlgorithms(command.getAlgorithms());
@@ -213,6 +218,19 @@ public class Patient extends Auditable {
         Condition.checkNotNull(phoneNumber, DomainExceptionCode.PATIENT_PHONE_NUMBER_NULL);
         Condition.check(phoneNumber.length() <= 20, DomainExceptionCode.PATIENT_PHONE_NUMBER_TOO_LONG);
         this.phoneNumber = phoneNumber;
+    }
+
+    /**
+     * Sets the language of the patient's app, push notifications and emails. A null language
+     * keeps the current one, so a client that doesn't send it (an older admin UI, say) neither
+     * fails nor resets it.
+     */
+    public void changeLanguage(final String language) {
+        if (language == null) {
+            return;
+        }
+        Condition.check(PatientLanguage.isSupported(language), DomainExceptionCode.PATIENT_LANGUAGE_UNSUPPORTED);
+        this.language = language;
     }
 
     private void setCaretakers(List<Caretaker> caretakers) {

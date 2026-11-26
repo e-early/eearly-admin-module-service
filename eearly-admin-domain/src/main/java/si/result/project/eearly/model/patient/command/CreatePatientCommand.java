@@ -27,6 +27,8 @@ public class CreatePatientCommand {
     private final String country;
     private final String email;
     private final String phoneNumber;
+    /** ISO 639-1 code; null keeps the current language (the default on create). */
+    private final String language;
 
     private final List<Caretaker> caretakers;
     private final List<Measurement> measurements;
