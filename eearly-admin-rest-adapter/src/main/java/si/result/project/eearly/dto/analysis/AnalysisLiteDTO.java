@@ -3,6 +3,7 @@ package si.result.project.eearly.dto.analysis;
 import io.swagger.v3.oas.annotations.media.Schema;
 import si.result.project.eearly.dto.patient.PatientLiteDTO;
 import si.result.project.eearly.model.analysis.AnalysisState;
+import si.result.project.eearly.model.analysis.AnalysisTriggerType;
 
 import java.util.UUID;
 
@@ -21,6 +22,9 @@ public record AnalysisLiteDTO(
     boolean detected,
 
     @Schema(example = "")
-    PatientLiteDTO patient
+    PatientLiteDTO patient,
+
+    @Schema(example = "MANUAL", description = "How the analysis was created; read-only")
+    AnalysisTriggerType triggerType
 
 ) {}

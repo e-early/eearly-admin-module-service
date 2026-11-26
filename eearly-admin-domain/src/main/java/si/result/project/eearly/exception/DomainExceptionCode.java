@@ -52,6 +52,7 @@ public enum DomainExceptionCode implements ExceptionCode {
   ANALYSIS_NOT_FOUND("Analysis not found", ExceptionReason.ENTITY_NOT_FOUND),
   ANALYSIS_NAME_NULL("Analysis name is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_STATE_NULL("Analysis state is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  ANALYSIS_TRIGGER_TYPE_NULL("Analysis trigger type is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_PATIENT_NULL("Analysis patient is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_RESULT_DATA_MISSING("Analysis has no result data yet", ExceptionReason.ILLEGAL_STATE),
   ANALYSIS_DETECTION_NOT_FOUND("Detection not found for this analysis", ExceptionReason.ENTITY_NOT_FOUND),

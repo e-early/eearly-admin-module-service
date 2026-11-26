@@ -32,6 +32,7 @@ public interface AlgorithmExecutionMapper {
     @Mapping(target = "analysis", source = "analysis")
     @Mapping(target = "patient", source = "patient")
     @Mapping(target = "inputParameters", source = "dto.inputParameters")
+    @Mapping(target = "triggerType", constant = "MANUAL")
     CreateAlgorithmExecutionCommand toCreateCommand(final AlgorithmExecutionUpsertDTO dto, final Algorithm algorithm, final Analysis analysis, final Patient patient);
 
     @AfterMapping
