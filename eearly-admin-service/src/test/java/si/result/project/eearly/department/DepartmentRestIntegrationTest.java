@@ -164,7 +164,7 @@ class DepartmentRestIntegrationTest {
     }
 
     private UUID createOrganization(final String name) {
-        return organizationRepository.save(Organization.create(new CreateOrganizationCommand(name))).getId();
+        return organizationRepository.save(Organization.create(new CreateOrganizationCommand(name, null))).getId();
     }
 
     private String body(final String name, final UUID organizationId) throws Exception {

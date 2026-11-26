@@ -2,6 +2,9 @@ package si.result.project.eearly.dto.organization;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import si.result.project.eearly.dto.department.DepartmentLiteDTO;
+
+import java.util.List;
 import java.util.UUID;
 
 @Schema
@@ -11,6 +14,8 @@ public record OrganizationUpsertDTO(
         UUID id,
 
         @Schema(example = "Test Organization")
-        String name
+        String name,
+
+        List<DepartmentLiteDTO> departmentList
 
 ) {}

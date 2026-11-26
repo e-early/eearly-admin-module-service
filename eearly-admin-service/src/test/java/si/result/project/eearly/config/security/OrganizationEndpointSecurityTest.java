@@ -81,7 +81,7 @@ class OrganizationEndpointSecurityTest {
         when(jwtDecoder.decode("invalid")).thenThrow(new BadJwtException("invalid"));
 
         when(facade.getById(ID)).thenReturn(new OrganizationDTO(ID, "Test Organization", List.of()));
-        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization"));
+        when(facade.create(any())).thenReturn(new OrganizationUpsertDTO(ID, "Test Organization", null));
     }
 
     private void token(String value, String subject, String resourceAccess) throws Exception {

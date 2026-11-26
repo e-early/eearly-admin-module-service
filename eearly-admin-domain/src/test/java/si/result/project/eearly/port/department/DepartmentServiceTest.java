@@ -35,7 +35,7 @@ class DepartmentServiceTest {
     private DepartmentService departmentService;
 
     private static Organization organization(final String name) {
-        return Organization.create(new CreateOrganizationCommand(name));
+        return Organization.create(new CreateOrganizationCommand(name, null));
     }
 
     @Test
