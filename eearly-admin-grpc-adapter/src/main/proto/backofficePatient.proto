@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package si.result.eearly.genproto;
+
+option java_multiple_files = true;
+option java_package = "si.result.eearly.genproto";
+option java_outer_classname = "BackofficePatientProto";
+
+// Called by the admin service, which owns patient demographics, to keep this service's copy in
+// sync. Body composition needs the patient's age and sex; the app, push notifications and
+// reminders use the patient's language.
+service BackofficePatientService {
+  rpc UpsertPatientDemographics (UpsertPatientDemographicsRequest) returns (UpsertPatientDemographicsResponse) {}
+}
+
+message UpsertPatientDemographicsRequest {
+  string userId = 1;
+  string dateOfBirth = 2; // ISO-8601 date, yyyy-MM-dd
+  Sex sex = 3;
+  string language = 4; // ISO 639-1 code ("sl", "en"); empty = keep the current one
+}
+
+message UpsertPatientDemographicsResponse {}
+
+enum Sex {
+  UNKNOWN_SEX = 0;
+  MALE = 1;
+  FEMALE = 2;
+  OTHER = 3;
+}
