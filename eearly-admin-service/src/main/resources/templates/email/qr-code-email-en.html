@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Your Healthcare Monitoring QR Code</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #007bff;
+            margin: 0 0 10px 0;
+        }
+        .header h2 {
+            color: #6c757d;
+            margin: 0;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            margin-top: 30px;
+        }
+        .instructions {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        .warning strong {
+            color: #664d03;
+        }
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .signature {
+            margin-top: 30px;
+            font-size: 16px;
+        }
+        .qr-code-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+        }
+        .qr-code-section h3 {
+            color: #007bff;
+            margin-bottom: 15px;
+        }
+        .qr-code-section img {
+            max-width: 250px;
+            height: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: white;
+            padding: 10px;
+        }
+        .qr-code-section p {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        {{LOGO}}
+        <h1>{{APP_NAME}}</h1>
+        <h2>Healthcare Monitoring Setup</h2>
+    </div>
+
+    <div class="content">
+        <p class="greeting">Dear {{PATIENT_NAME}},</p>
+
+        <p>Your healthcare provider <strong>{{CARETAKER_NAME}}</strong> has set up remote monitoring for your health condition.</p>
+
+        <div class="instructions">
+            <h3>Setup Instructions:</h3>
+            <ol>
+                <li>Download our mobile application from your device's app store{{APP_DOWNLOAD_LINK}}</li>
+                <li>Scan the QR code below with the mobile app to configure your patient information</li>
+                <li>Follow the in-app instructions to complete the setup</li>
+            </ol>
+        </div>
+
+        <div class="qr-code-section">
+            <h3>Your Personal QR Code</h3>
+            <img src="{{QR_CODE_IMAGE}}" alt="Your Healthcare Monitoring QR Code" />
+            <p>Scan this code with your mobile device's camera or QR code scanner within the app</p>
+        </div>
+
+        <div class="warning">
+            <strong>Important:</strong> This QR code is unique to you and expires in 30 days. Please do not share it with anyone.
+        </div>
+
+        <p>If you have any questions or need assistance, please contact your healthcare provider.</p>
+
+        <p class="signature">
+            Best regards,<br>
+            {{APP_NAME}} Team
+        </p>
+    </div>
+
+    <div class="footer">
+        <p>This email was sent from {{APP_NAME}}. Please do not reply to this email.</p>
+    </div>
+</div>
+</body>
+</html>

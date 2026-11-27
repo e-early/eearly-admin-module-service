@@ -113,6 +113,9 @@ public enum DomainExceptionCode implements ExceptionCode {
   NOTIFICATION_ANALYSIS_EXECUTION_HANDLING_FAILED(
       "Failed to handle algorithm execution notification event", ExceptionReason.RUNTIME),
   NOTIFICATION_PATIENT_SYNC_FAILED("Failed to handle patient sync notification event", ExceptionReason.RUNTIME),
+  EMAIL_SEND_FAILED("Email send failed", ExceptionReason.RUNTIME),
+  EMAIL_TEMPLATE_NOT_FOUND("Email template not found", ExceptionReason.ENTITY_NOT_FOUND),
+  EMAIL_TEMPLATE_LOAD_FAILED("Email template load failed", ExceptionReason.RUNTIME),
   REFERENCE_ID_NULL("Reference ID is null", ExceptionReason.ILLEGAL_ARGUMENT);
 
 
