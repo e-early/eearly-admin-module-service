@@ -93,6 +93,11 @@ public class QRCode extends Auditable {
         }
     }
 
+    /** Withdraws the code: it can no longer be used (its onboarding link has been replaced by a newer one). */
+    public void revoke() {
+        setStatus(QRCodeStatus.REVOKED);
+    }
+
     private void setToken(String token) {
         Condition.checkNotNull(token, DomainExceptionCode.QR_CODE_TOKEN_NULL);
         this.token = token;

@@ -258,4 +258,54 @@ class QRCodeServiceTest {
             verify(cb).equal(idPath, caretakerId);
         }
     }
+
+    @Nested
+    @DisplayName("Create QR code")
+    class CreateTest {
+
+        private CreateQRCodeCommand command(Patient patient) {
+            Caretaker caretaker = mock(Caretaker.class);
+            return new CreateQRCodeCommand("tok", OffsetDateTime.now().plusDays(1), "image", patient, caretaker,
+                    "https://example.org/o/1");
+        }
+
+        @Test
+        @DisplayName("Should revoke the patient's active QR codes and save the new one as active")
+        void create_ShouldRevokeThePreviousActiveCodes() {
+            UUID patientId = UUID.randomUUID();
+            Patient patient = mock(Patient.class);
+            when(patient.getId()).thenReturn(patientId);
+            QRCode previousOne = mock(QRCode.class);
+            QRCode previousTwo = mock(QRCode.class);
+            when(qrCodeRepository.findByPatientIdAndStatus(patientId, QRCodeStatus.ACTIVE))
+                    .thenReturn(java.util.List.of(previousOne, previousTwo));
+            when(qrCodeRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            QRCode created = qrCodeService.create(command(patient));
+
+            verify(previousOne).revoke();
+            verify(previousTwo).revoke();
+            verify(qrCodeRepository).save(previousOne);
+            verify(qrCodeRepository).save(previousTwo);
+            assertEquals(QRCodeStatus.ACTIVE, created.getStatus());
+            // Only the active ones are asked for: used and expired codes keep their status.
+            verify(qrCodeRepository, never()).findByPatientIdAndStatus(patientId, QRCodeStatus.USED);
+        }
+
+        @Test
+        @DisplayName("Should create the first QR code of a patient without revoking anything")
+        void create_WithoutPreviousCodes_ShouldOnlySaveTheNewOne() {
+            UUID patientId = UUID.randomUUID();
+            Patient patient = mock(Patient.class);
+            when(patient.getId()).thenReturn(patientId);
+            when(qrCodeRepository.findByPatientIdAndStatus(patientId, QRCodeStatus.ACTIVE))
+                    .thenReturn(java.util.List.of());
+            when(qrCodeRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            QRCode created = qrCodeService.create(command(patient));
+
+            verify(qrCodeRepository, times(1)).save(any());
+            assertEquals(QRCodeStatus.ACTIVE, created.getStatus());
+        }
+    }
 }

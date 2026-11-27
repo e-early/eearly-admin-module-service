@@ -27,6 +27,9 @@ public interface QRCodeRepository {
 
     List<QRCode> findByStatusAndExpiresAtBefore(QRCodeStatus status, OffsetDateTime dateTime);
 
+    /** The patient's QR codes in the given status. */
+    List<QRCode> findByPatientIdAndStatus(UUID patientId, QRCodeStatus status);
+
     Page<QRCode> findAll(Specification<QRCode> specification, Pageable pageable);
 
     QRCode save(QRCode qrCode);

@@ -53,7 +53,6 @@ public class SecurityConfig {
             .requestMatchers("/v3/api-docs/**").permitAll()
             .requestMatchers("/v3/api-docs/swagger-config").permitAll()
             .requestMatchers("/v3/api-docs").permitAll()
-            .requestMatchers("/api/v1/mobile/*").permitAll()
             // Administration: organizations are managed by administrators only.
             .requestMatchers("/api/v1/organizations", "/api/v1/organizations/**")
                 .hasRole(AdminRoles.ADMINISTRATOR)

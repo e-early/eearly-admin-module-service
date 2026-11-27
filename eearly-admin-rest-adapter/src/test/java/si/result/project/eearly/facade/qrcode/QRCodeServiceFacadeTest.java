@@ -28,6 +28,7 @@ import si.result.project.eearly.model.qrcode.QRCodeStatus;
 import si.result.project.eearly.model.qrcode.command.CreateQRCodeCommand;
 import si.result.project.eearly.port.caretaker.CaretakerService;
 import si.result.project.eearly.port.email.AsyncEmailService;
+import si.result.project.eearly.port.mobile.MobileServiceService;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.project.eearly.port.qrcode.QRCodeService;
 import si.result.project.eearly.util.qrcode.QRCodeGenerateType;
@@ -68,6 +69,8 @@ class QRCodeServiceFacadeTest {
     @Mock
     private AuthenticationProvider authenticationProvider;
     @Mock
+    private MobileServiceService mobileServiceService;
+    @Mock
     private Filter filter;
 
     @InjectMocks
@@ -96,6 +99,8 @@ class QRCodeServiceFacadeTest {
         qrCodeId = UUID.randomUUID();
         qrCode = mock(QRCode.class);
         lenient().when(qrCode.getPatient()).thenReturn(patient);
+        lenient().when(qrCode.getStatus()).thenReturn(QRCodeStatus.ACTIVE);
+        lenient().when(qrCode.getExpiresAt()).thenReturn(OffsetDateTime.now().plusDays(1));
     }
 
     private void patientIsNotTheCaretakers() {
@@ -227,48 +232,99 @@ class QRCodeServiceFacadeTest {
     @DisplayName("Create QR code")
     class CreateTest {
 
-        private final String onboardingUrl = "http://mobile/api/v1/onboarding/";
+        private static final String LINK = "https://mobile.example.org/api/v1/onboarding/single-use-code";
 
-        private void tokenIsGenerated() {
-            when(qrCodeUtilityService.generateQrToken()).thenReturn("token");
+        private UUID patientKeycloakId;
+
+        @BeforeEach
+        void patientIsOnboarded() {
+            patientKeycloakId = UUID.randomUUID();
+            lenient().when(patient.getKeycloakId()).thenReturn(patientKeycloakId);
+            lenient().when(mobileServiceService.issueOnboardingLink(patientKeycloakId)).thenReturn(LINK);
         }
 
         @Test
-        @DisplayName("Should create the QR code on the authenticated caretaker's behalf, ignoring the request's caretakerId")
-        void create_WhenPatientAssigned_ShouldUseAuthenticatedCaretaker() {
+        @DisplayName("Should encode the link issued by the mobile service and ignore the request's onboardingUrl and caretakerId")
+        void create_WhenPatientAssigned_ShouldUseTheIssuedLinkAndAuthenticatedCaretaker() {
             UUID requestCaretakerId = UUID.randomUUID();
-            String url = onboardingUrl + patientId;
-            QRCodeGenerateDTO request = new QRCodeGenerateDTO(patientId, requestCaretakerId, url);
+            QRCodeGenerateDTO request = new QRCodeGenerateDTO(patientId, requestCaretakerId, "https://client.example.net/chosen");
             CreateQRCodeCommand command = mock(CreateQRCodeCommand.class);
             QRCodeLiteDTO dto = mock(QRCodeLiteDTO.class);
+            OffsetDateTime expiresAt = OffsetDateTime.now().plusDays(30);
             when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
-            when(qrCodeService.findByPatientId(patientId))
-                    .thenThrow(new DomainException(DomainExceptionCode.QR_CODE_NOT_FOUND));
             when(qrCodeUtilityService.generateQrToken()).thenReturn("token");
-            when(qrCodeImageService.generateQRCodeImage(patientId, url, "token", QRCodeGenerateType.IMAGE)).thenReturn("image");
-            when(qrCodeMapper.toCreateCommand(eq("token"), any(), eq("image"), eq(patient), eq(caretaker), eq(url)))
-                    .thenReturn(command);
+            when(qrCodeUtilityService.generateTokenExpirationTime()).thenReturn(expiresAt);
+            when(qrCodeImageService.generateQRCodeImage(patientId, LINK, "token", QRCodeGenerateType.IMAGE)).thenReturn("image");
+            when(qrCodeMapper.toCreateCommand("token", expiresAt, "image", patient, caretaker, LINK)).thenReturn(command);
             when(qrCodeService.create(command)).thenReturn(qrCode);
             when(qrCodeMapper.toLiteDTO(qrCode)).thenReturn(dto);
 
             assertEquals(dto, qrCodeServiceFacade.create(request));
+
+            verify(qrCodeUtilityService).validateOnboardingUrl(LINK);
+            verify(mobileServiceService).issueOnboardingLink(patientKeycloakId);
+            verify(qrCodeImageService, never()).generateQRCodeImage(any(), eq("https://client.example.net/chosen"), any(), any());
             verify(caretakerService, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("Should throw PATIENT_NOT_ONBOARDED for a patient without a Keycloak ID and not call the mobile service")
+        void create_WithoutKeycloakId_ShouldThrow() {
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+            when(patient.getKeycloakId()).thenReturn(null);
+
+            DomainException exception = assertThrows(DomainException.class,
+                    () -> qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, "https://x.example.org/o")));
+
+            assertEquals(DomainExceptionCode.PATIENT_NOT_ONBOARDED, exception.getCode());
+            verifyNoInteractions(mobileServiceService);
+            verify(qrCodeService, never()).create(any());
+        }
+
+        @Test
+        @DisplayName("Should create nothing when the mobile service fails")
+        void create_WhenMobileServiceFails_ShouldCreateNothing() {
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+            when(mobileServiceService.issueOnboardingLink(patientKeycloakId))
+                    .thenThrow(new DomainException(DomainExceptionCode.MOBILE_USER_NOT_FOUND));
+
+            DomainException exception = assertThrows(DomainException.class,
+                    () -> qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, null)));
+
+            assertEquals(DomainExceptionCode.MOBILE_USER_NOT_FOUND, exception.getCode());
+            verify(qrCodeService, never()).create(any());
+        }
+
+        @Test
+        @DisplayName("Should create nothing when the issued link is not valid")
+        void create_WhenTheLinkIsInvalid_ShouldCreateNothing() {
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+            doThrow(new DomainException(DomainExceptionCode.QR_CODE_ONBOARDING_URL_INVALID))
+                    .when(qrCodeUtilityService).validateOnboardingUrl(LINK);
+
+            DomainException exception = assertThrows(DomainException.class,
+                    () -> qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, null)));
+
+            assertEquals(DomainExceptionCode.QR_CODE_ONBOARDING_URL_INVALID, exception.getCode());
+            verify(qrCodeService, never()).create(any());
+            verifyNoInteractions(qrCodeImageService);
         }
 
         @Test
         @DisplayName("Should throw PATIENT_NOT_FOUND for another caretaker's patient and create nothing")
         void create_WhenPatientNotAssigned_ShouldThrowPatientNotFound() {
-            QRCodeGenerateDTO request = new QRCodeGenerateDTO(patientId, caretakerId, "http://mobile/onboarding");
+            QRCodeGenerateDTO request = new QRCodeGenerateDTO(patientId, caretakerId, null);
             patientIsNotTheCaretakers();
 
             assertPatientNotFound(assertThrows(DomainException.class, () -> qrCodeServiceFacade.create(request)));
             verify(qrCodeService, never()).create(any());
+            verifyNoInteractions(mobileServiceService);
         }
 
         @Test
         @DisplayName("Should throw PATIENT_ID_NOT_PROVIDED without a patient and create nothing")
         void create_WithoutPatient_ShouldThrow() {
-            QRCodeGenerateDTO request = new QRCodeGenerateDTO(null, caretakerId, onboardingUrl);
+            QRCodeGenerateDTO request = new QRCodeGenerateDTO(null, caretakerId, null);
 
             DomainException exception = assertThrows(DomainException.class, () -> qrCodeServiceFacade.create(request));
 
@@ -277,39 +333,22 @@ class QRCodeServiceFacadeTest {
         }
 
         @Test
-        @DisplayName("Should not create a second QR code while the first is active and has not expired")
-        void create_WhenAValidQRCodeExists_ShouldThrowQRCodeFound() {
-            QRCode existing = mock(QRCode.class);
-            when(existing.getStatus()).thenReturn(QRCodeStatus.ACTIVE);
-            when(existing.getExpiresAt()).thenReturn(OffsetDateTime.now().plusDays(1));
-            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
-            when(qrCodeService.findByPatientId(patientId)).thenReturn(existing);
-
-            DomainException exception = assertThrows(DomainException.class,
-                    () -> qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, onboardingUrl)));
-
-            assertEquals(DomainExceptionCode.QR_CODE_FOUND, exception.getCode());
-            verify(qrCodeService, never()).create(any());
-        }
-
-        @Test
-        @DisplayName("Should create a new QR code once the earlier one has expired or has been used")
-        void create_WhenTheEarlierQRCodeIsNoLongerValid_ShouldCreateANewOne() {
-            QRCode expired = mock(QRCode.class);
-            when(expired.getStatus()).thenReturn(QRCodeStatus.ACTIVE, QRCodeStatus.USED);
-            lenient().when(expired.getExpiresAt()).thenReturn(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(1));
-            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
-            when(qrCodeService.findByPatientId(patientId)).thenReturn(expired);
-            tokenIsGenerated();
-            when(qrCodeImageService.generateQRCodeImage(any(), any(), any(), any())).thenReturn("image");
+        @DisplayName("Should issue a new link and create a new QR code for each request, even while an active one exists")
+        void create_ShouldCreateANewCodeEachTime() {
             CreateQRCodeCommand command = mock(CreateQRCodeCommand.class);
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+            when(qrCodeUtilityService.generateQrToken()).thenReturn("token");
+            when(qrCodeImageService.generateQRCodeImage(any(), any(), any(), any())).thenReturn("image");
             when(qrCodeMapper.toCreateCommand(any(), any(), any(), any(), any(), any())).thenReturn(command);
             when(qrCodeService.create(command)).thenReturn(qrCode);
 
-            qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, onboardingUrl));
-            qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, onboardingUrl));
+            qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, null));
+            qrCodeServiceFacade.create(new QRCodeGenerateDTO(patientId, null, null));
 
+            verify(mobileServiceService, times(2)).issueOnboardingLink(patientKeycloakId);
             verify(qrCodeService, times(2)).create(command);
+            // The earlier codes are revoked by the QR code service as the new one is created.
+            verify(qrCodeService, never()).findByPatientId(any());
         }
     }
 
@@ -382,6 +421,37 @@ class QRCodeServiceFacadeTest {
                     () -> qrCodeServiceFacade.sendQRCodeByEmailAsync(new QRCodeSendEmailDTO(null, "eEarly")));
 
             assertEquals(DomainExceptionCode.QR_CODE_NOT_FOUND, exception.getCode());
+            verifyNoInteractions(asyncEmailService);
+        }
+
+        @Test
+        @DisplayName("Should refuse a QR code that is revoked, used or expired by status, and send nothing")
+        void sendQRCodeByEmailAsync_WhenNotActive_ShouldThrowQRCodeNotActive() {
+            when(qrCodeService.findById(qrCodeId)).thenReturn(qrCode);
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+
+            for (QRCodeStatus status : new QRCodeStatus[] {QRCodeStatus.REVOKED, QRCodeStatus.USED, QRCodeStatus.EXPIRED}) {
+                when(qrCode.getStatus()).thenReturn(status);
+
+                DomainException exception = assertThrows(DomainException.class,
+                        () -> qrCodeServiceFacade.sendQRCodeByEmailAsync(new QRCodeSendEmailDTO(qrCodeId, "eEarly")));
+
+                assertEquals(DomainExceptionCode.QR_CODE_NOT_ACTIVE, exception.getCode());
+            }
+            verifyNoInteractions(asyncEmailService);
+        }
+
+        @Test
+        @DisplayName("Should refuse an active QR code whose expiry time has passed, and send nothing")
+        void sendQRCodeByEmailAsync_WhenExpired_ShouldThrowQRCodeNotActive() {
+            when(qrCodeService.findById(qrCodeId)).thenReturn(qrCode);
+            when(patientService.findByIdForCaretaker(patientId, caretakerId)).thenReturn(patient);
+            when(qrCode.getExpiresAt()).thenReturn(OffsetDateTime.now().minusSeconds(1));
+
+            DomainException exception = assertThrows(DomainException.class,
+                    () -> qrCodeServiceFacade.sendQRCodeByEmailAsync(new QRCodeSendEmailDTO(qrCodeId, "eEarly")));
+
+            assertEquals(DomainExceptionCode.QR_CODE_NOT_ACTIVE, exception.getCode());
             verifyNoInteractions(asyncEmailService);
         }
     }

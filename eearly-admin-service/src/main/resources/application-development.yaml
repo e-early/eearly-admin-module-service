@@ -57,6 +57,10 @@ service:
 email:
   from: ${EMAIL_FROM:noreply@example.org}
 
+qrcode:
+  # The local mobile service answers with http links.
+  allow-http-onboarding-url: ${QR_CODE_ALLOW_HTTP_ONBOARDING_URL:true}
+
 mobile:
   service:
     # See: https://github.com/result-si/eearly-mobile for setup

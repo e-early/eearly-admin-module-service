@@ -47,6 +47,9 @@ public enum DomainExceptionCode implements ExceptionCode {
   QR_CODE_GENERATION_FAILED("QR code generation failed", ExceptionReason.ILLEGAL_ARGUMENT),
   QR_CODE_ONBOARDING_URL_NULL("QR code onboarding url is null", ExceptionReason.ILLEGAL_ARGUMENT),
   QR_CODE_ONBOARDING_URL_BLANK("QR code onboarding url is blank", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_ONBOARDING_URL_INVALID("Onboarding link issued by the mobile service is not valid", ExceptionReason.RUNTIME),
+  QR_CODE_NOT_ACTIVE("QR code is not active or has expired", ExceptionReason.ILLEGAL_ARGUMENT),
+  PATIENT_NOT_ONBOARDED("Patient has no mobile user yet", ExceptionReason.ILLEGAL_ARGUMENT),
 
   CARETAKER_ID_NULL("Caretaker ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_NOT_FOUND("Caretaker not found", ExceptionReason.ENTITY_NOT_FOUND),
@@ -108,6 +111,7 @@ public enum DomainExceptionCode implements ExceptionCode {
   ALGORITHM_INPUT_PREPARATION_FAILED("Failed to prepare algorithm input payload", ExceptionReason.RUNTIME),
 
   MOBILE_SERVICE_REQUEST_FAILED("Request to Mobile Service failed", ExceptionReason.RUNTIME),
+  MOBILE_USER_NOT_FOUND("User not found in Mobile Service", ExceptionReason.ENTITY_NOT_FOUND),
 
   ANALYSIS_FEEDBACK_PARAMETER_MISSING("Analysis feedback parameter is missing", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_FEEDBACK_PARAMETER_INVALID("Analysis feedback parameter is invalid", ExceptionReason.ILLEGAL_ARGUMENT),

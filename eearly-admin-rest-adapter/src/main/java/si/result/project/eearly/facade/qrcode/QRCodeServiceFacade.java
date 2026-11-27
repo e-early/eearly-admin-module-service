@@ -17,6 +17,7 @@ import si.result.project.eearly.model.qrcode.QRCode;
 import si.result.project.eearly.model.qrcode.QRCodeStatus;
 import si.result.project.eearly.port.caretaker.CaretakerService;
 import si.result.project.eearly.port.email.AsyncEmailService;
+import si.result.project.eearly.port.mobile.MobileServiceService;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.project.eearly.port.qrcode.QRCodeService;
 import si.result.project.eearly.util.qrcode.QRCodeGenerateType;
@@ -48,6 +49,7 @@ public class QRCodeServiceFacade {
     private final AsyncEmailService asyncEmailService;
     private final CaretakerService caretakerService;
     private final AuthenticationProvider authenticationProvider;
+    private final MobileServiceService mobileServiceService;
 
     /**
      * QR codes of the patients assigned to the authenticated caretaker.
@@ -73,13 +75,19 @@ public class QRCodeServiceFacade {
 
     /**
      * Creates the QR code of a patient assigned to the authenticated caretaker, on that caretaker's
-     * behalf. Request caretakerId is ignored.
+     * behalf. Request caretakerId and onboardingUrl are ignored: the code encodes a fresh single-use onboarding link
+     * that the mobile service issues for the patient (which invalidates the patient's earlier links), and the
+     * patient's earlier active codes are revoked. The patient must have a mobile user already.
      */
     @Transactional
     public QRCodeLiteDTO create(final QRCodeGenerateDTO qrCodeGenerateDTO) {
         Caretaker caretaker = getAuthenticatedCaretaker();
         Patient patient = patientService.findByIdForCaretaker(requirePatientId(qrCodeGenerateDTO.patientId()), caretaker.getId());
-        isQRCodeForPatientIdInSystem(qrCodeGenerateDTO.patientId());
+        if (patient.getKeycloakId() == null) {
+            throw new DomainException(DomainExceptionCode.PATIENT_NOT_ONBOARDED);
+        }
+        final String onboardingUrl = mobileServiceService.issueOnboardingLink(patient.getKeycloakId());
+        qrCodeUtilityService.validateOnboardingUrl(onboardingUrl);
         String token = qrCodeUtilityService.generateQrToken();
         return qrCodeMapper.toLiteDTO(
                 qrCodeService.create(
@@ -88,12 +96,12 @@ public class QRCodeServiceFacade {
                                 qrCodeUtilityService.generateTokenExpirationTime(),
                                 qrCodeImageService.generateQRCodeImage(
                                     qrCodeGenerateDTO.patientId(),
-                                    qrCodeGenerateDTO.onboardingUrl(),
+                                    onboardingUrl,
                                     token,
                                     QRCodeGenerateType.IMAGE),
                                 patient,
                                 caretaker,
-                                qrCodeGenerateDTO.onboardingUrl()
+                                onboardingUrl
                         )));
     }
 
@@ -102,10 +110,15 @@ public class QRCodeServiceFacade {
      * the patient's record and the sender name is the optional {@code appName}; neither the address nor anything else
      * of the message can be chosen by the caller. Recipient domains are limited by
      * {@code email.allowed-recipient-domains}.
+     * Only an active, unexpired QR code is sent ({@code QR_CODE_NOT_ACTIVE} otherwise): a used, revoked or expired
+     * one no longer works.
      */
     @Transactional(readOnly = true)
     public CompletableFuture<Void> sendQRCodeByEmailAsync(QRCodeSendEmailDTO qrCodeSendEmailDTO) {
         QRCode qrCode = findAssignedQRCode(qrCodeSendEmailDTO.qrCodeId());
+        if (!isQRCodeValid(qrCode)) {
+            throw new DomainException(DomainExceptionCode.QR_CODE_NOT_ACTIVE);
+        }
         Patient patient = qrCode.getPatient();
         Caretaker caretaker = qrCode.getCaretaker();
 
@@ -124,19 +137,6 @@ public class QRCodeServiceFacade {
         );
 
         return asyncEmailService.sendQRCodeEmailAsync(command);
-    }
-
-    public void isQRCodeForPatientIdInSystem(final UUID patientId) {
-        try {
-            final var existingQRCode = qrCodeService.findByPatientId(patientId);
-            if (isQRCodeValid(existingQRCode)) {
-                throw new DomainException(DomainExceptionCode.QR_CODE_FOUND);
-            }
-        } catch (DomainException e) {
-            if (!DomainExceptionCode.QR_CODE_NOT_FOUND.equals(e.getCode())) {
-                throw e;
-            }
-        }
     }
 
     // A QR code is the caretaker's when its patient is assigned to them; otherwise PATIENT_NOT_FOUND
@@ -171,6 +171,7 @@ public class QRCodeServiceFacade {
 
     private boolean isQRCodeValid(QRCode qrCode) {
         return qrCode.getStatus() == QRCodeStatus.ACTIVE &&
+                qrCode.getExpiresAt() != null &&
                 qrCode.getExpiresAt().isAfter(OffsetDateTime.now());
     }
 

@@ -239,11 +239,15 @@ are written `{{NAME}}`: `APP_NAME`, `PATIENT_NAME`, `CARETAKER_NAME`, `QR_CODE_I
 ## QR code onboarding
 
 A caretaker creates a QR code for a patient assigned to them; the patient scans it (or receives it by e-mail) to
-set up the mobile app. Each code holds a random token and is valid for 30 days.
+set up the mobile app. Each code holds a random token and a single-use onboarding link that the mobile service
+issues for the patient when the code is created; the patient must already have a mobile user (created with the
+patient). Creating a new code asks the mobile service for a new link, which invalidates the patient's earlier
+links, and revokes the patient's earlier active codes. A code is valid for the validity of the links
+(`ONBOARDING_CODE_VALIDITY`, 30 days by default); a code that is used, revoked or expired cannot be sent by e-mail.
 
 | Method and path | Purpose |
 |---|---|
-| `POST /api/v1/qrcodes` | create a code for `patientId` (optional `onboardingUrl`); 201 |
+| `POST /api/v1/qrcodes` | create a code for `patientId`; 201. `onboardingUrl` and `caretakerId` in the request are ignored |
 | `GET /api/v1/qrcodes` | page of the codes of the caller's patients |
 | `GET /api/v1/qrcodes/{id}` | one code |
 | `GET /api/v1/qrcodes/patient/{id}` | the latest code of a patient |
@@ -255,10 +259,13 @@ get 401.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `QR_CODE_LINK_BASE_URL` | empty | base of the link encoded in the code when no `onboardingUrl` is given |
+| `QR_CODE_LINK_BASE_URL` | empty | app-link page the code points at; empty encodes the issued onboarding link itself |
+| `ONBOARDING_CODE_VALIDITY` | `P30D` | validity of a code, an ISO-8601 duration; keep it equal to the onboarding link validity of the mobile service |
+| `QR_CODE_ALLOW_HTTP_ONBOARDING_URL` | `false` (`true` with the `development` profile) | accept a plain `http` onboarding link; otherwise only `https` links of at most 512 characters are accepted |
 | `EMAIL_LOGO` | `classpath:images/email-logo.png` | logo drawn in the middle of the code; empty gives a plain code |
 
-Tokens are not logged. There is no rate limiting in the service; put it in front of the endpoints if exposed.
+Tokens and onboarding links are not logged. There is no rate limiting in the service; put it in front of the
+endpoints if exposed.
 
 ---
 
