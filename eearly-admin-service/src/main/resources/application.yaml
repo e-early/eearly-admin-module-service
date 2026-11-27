@@ -55,6 +55,25 @@ spring:
         jwt:
           jwk-set-uri: ${JWK_SET_URI}
 
+  # SMTP server for outgoing e-mail. Failed sends are logged and never fail a request, so an unreachable or
+  # unconfigured server only means no e-mail.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:25}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          ssl:
+            enable: ${MAIL_SMTP_SSL:false}
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${MAIL_TIMEOUT_MS:60000}
+          writetimeout: ${MAIL_TIMEOUT_MS:60000}
+
   grpc:
     client:
       channels:
@@ -69,6 +88,24 @@ springdoc:
 
 service:
   domain: ${SERVICE_DOMAIN_URL}
+
+email:
+  # Sender address of every message
+  from: ${EMAIL_FROM:noreply@example.org}
+  # Application name shown as the sender name and in the message text
+  app-name: ${EMAIL_APP_NAME:eEarly}
+  # Comma-separated recipient domains; messages to any other domain are skipped. * allows all.
+  allowed-recipient-domains: ${EMAIL_ALLOWED_RECIPIENT_DOMAINS:*}
+  # Optional link to the mobile application, shown in the QR code message
+  app-download-url: ${EMAIL_APP_DOWNLOAD_URL:}
+  # Logo shown in the messages (classpath: or file: location); empty sends the messages without a logo
+  logo: ${EMAIL_LOGO:classpath:images/email-logo.png}
+  templates:
+    # Folder of the templates (classpath: or file: location), so a deployment can brand them
+    path: ${EMAIL_TEMPLATE_FOLDER:classpath:templates/email/}
+  qrcode:
+    # Slovenian (default language) template; the English one is the same name with -en before the extension
+    template: ${EMAIL_TEMPLATE:qr-code-email.html}
 
 mobile:
   service:

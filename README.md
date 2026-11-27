@@ -10,7 +10,8 @@ Supports:
 - analyses with **time-range selections**
 - algorithm executions (`POST /predict` on the hosted model)
 
-Does **not** include organization/department/health-condition management, QR onboarding, email, or development simulation.
+Does **not** include organization/department/health-condition management, QR onboarding, or development simulation.
+It contains the e-mail infrastructure the QR onboarding sends through (see [E-mail](#e-mail)).
 
 ---
 
@@ -192,6 +193,44 @@ export USER_ID=$(jq -r '.payload.onboardingUrl' /tmp/patient.json \
 ```
 
 See the full guide for template upload, ingest scripts, env vars, and success criteria.
+
+---
+
+## E-mail
+
+The service sends e-mail (currently the patient QR code message) through an SMTP server, on a separate thread pool.
+A failed send is logged and never fails the request. Logs contain only the message type and a random message id,
+never recipients, names, codes or message bodies.
+
+For local development run a catch-all SMTP server, for example
+`docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit`, and start the service with the `development` profile
+(SMTP `localhost:1025`; read the messages at `http://localhost:8025`).
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MAIL_HOST` | `localhost` | SMTP host |
+| `MAIL_PORT` | `25` (`development`: `1025`) | SMTP port |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | SMTP credentials |
+| `MAIL_SMTP_AUTH` | `false` | authenticate against the server |
+| `MAIL_SMTP_STARTTLS` | `false` | upgrade to TLS with STARTTLS |
+| `MAIL_SMTP_SSL` | `false` | TLS from the start (implicit TLS, usually port 465) |
+| `MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_TIMEOUT_MS` | `10000`, `60000` | connect and read/write timeouts |
+| `EMAIL_FROM` | `noreply@example.org` | sender address of every message |
+| `EMAIL_APP_NAME` | `eEarly` | sender name and application name in the text |
+| `EMAIL_ALLOWED_RECIPIENT_DOMAINS` | `*` | comma-separated recipient domains; others are skipped (use on test systems) |
+| `EMAIL_APP_DOWNLOAD_URL` | empty | http(s) link to the mobile app, shown in the QR code message; empty omits it |
+| `EMAIL_TEMPLATE_FOLDER` | `classpath:templates/email/` | folder of the templates (`classpath:` or `file:`) |
+| `EMAIL_TEMPLATE` | `qr-code-email.html` | QR code template (Slovenian, the default language) |
+| `EMAIL_LOGO` | `classpath:images/email-logo.png` | logo in the messages; empty sends none |
+
+**Languages.** A patient's language (`sl` default, or `en`) selects the template: `EMAIL_TEMPLATE` for Slovenian and
+the same name with `-en` before the extension (`qr-code-email-en.html`) for English.
+
+**Branding.** The bundled templates and logo are neutral. To brand the messages, copy `templates/email/` from
+`eearly-admin-service/src/main/resources` to a folder of your own, edit the HTML and the logo, and point
+`EMAIL_TEMPLATE_FOLDER` and `EMAIL_LOGO` at them, for example `file:/etc/eearly/email-templates/`. Placeholders
+are written `{{NAME}}`: `APP_NAME`, `PATIENT_NAME`, `CARETAKER_NAME`, `QR_CODE_IMAGE`, `APP_DOWNLOAD_LINK` and
+`LOGO`. Values are HTML-escaped.
 
 ---
 
