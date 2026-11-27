@@ -7,5 +7,13 @@ public enum AnalysisState {
     REJECTED,
     CONFIRMED,
     COMPLETED,
-    ERROR
+    ERROR;
+
+    public static AnalysisState fromFeedback(final AnalysisState currentState, final FeedbackState feedback) {
+        return switch (feedback) {
+            case CONFIRMED -> CONFIRMED;
+            case REJECTED -> REJECTED;
+            default -> currentState;
+        };
+    }
 }

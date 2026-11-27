@@ -51,11 +51,28 @@ public class AlgorithmDataPreparationService {
     private static final String SCHEMA_PROPERTIES_PROPERTY = "properties";
     private static final String MEASUREMENTS_PROPERTY = "measurements";
     private static final String DATA_POINTS_PROPERTY = "dataPoints";
+    private static final String RECORDS_PROPERTY = "records";
     private static final String DATASET_OBJECTS_PROPERTY = "datasetObjects";
+    private static final String BATCH_ID_PROPERTY = "batchId";
     private static final String VALUE_PROPERTY = "value";
     private static final String TIMESTAMP_PROPERTY = "timestamp";
     private static final String HIGH_VALUE_PROPERTY = "highValue";
     private static final String LOW_VALUE_PROPERTY = "lowValue";
+
+    /**
+     * Vendor-extension JSON-Schema keys ("x-*") an algorithm's inputSchema can declare on a property to opt
+     * into non-default resolution behavior. Inert unless a schema is authored to use them.
+     */
+    private static final String VOCABULARY_SCHEMA_KEY = "x-vocabulary";
+    private static final String GENERATE_IF_MISSING_SCHEMA_FLAG = "x-generate-if-missing";
+
+    /**
+     * Supported values for {@value #VOCABULARY_SCHEMA_KEY}. Each entry is an external coding system a "type"
+     * property can request instead of the {@link MeasurementType} name.
+     */
+    private enum MeasurementVocabulary {
+        OMOP
+    }
 
     private final BiometricRecordService biometricRecordService;
 
@@ -158,6 +175,9 @@ public class AlgorithmDataPreparationService {
                 callbackUrl
         );
         final JsonNode payload = buildNode(inputSchema, null, buildContext);
+        if (hasTimeBoundedSelectionWindows(normalizedSelectionWindows)) {
+            validateMeasurementDataPresent(payload);
+        }
         return writePayload(payload);
     }
 
@@ -234,14 +254,14 @@ public class AlgorithmDataPreparationService {
             final JsonNode childNode = buildNode(propertyDefinitions.get(fieldName), fieldName, childContext);
             if (childNode != null) {
                 objectNode.set(fieldName, childNode);
-                // Testing alias: hosted apnea model expects `doctorsId`; OSS schema uses `caretakersId`.
-                if ("analysisPayload".equals(propertyName) && "caretakersId".equals(fieldName)) {
-                    objectNode.set("doctorsId", childNode);
-                }
             }
         }
 
-        if ("analysisPayload".equals(propertyName) && !objectNode.has("doctorsId")) {
+        // Opt-in alias: only when the schema itself declares a `doctorsId` property whose value could not be
+        // resolved directly, mirror the caretaker identifier into it.
+        if ("analysisPayload".equals(propertyName)
+                && propertyDefinitions.has("doctorsId")
+                && !objectNode.hasNonNull("doctorsId")) {
             final String doctorsId = firstCaretakerId(context.patient());
             if (doctorsId != null) {
                 objectNode.put("doctorsId", doctorsId);
@@ -274,6 +294,10 @@ public class AlgorithmDataPreparationService {
                         measurement,
                         context.selectionWindows()
                 );
+
+                if (records.isEmpty() && hasTimeBoundedSelectionWindows(context.selectionWindows())) {
+                    continue;
+                }
 
                 if (!hasSchemaProperties(itemSchema)) {
                     measurementNodes.add(serializeImplicitMeasurement(measurement, records));
@@ -351,6 +375,7 @@ public class AlgorithmDataPreparationService {
             case "algorithmId" -> uuidValue(context.algorithm() != null ? context.algorithm().getId() : null);
             case "name" -> resolveName(context);
             case "algorithmName" -> context.algorithm() != null ? context.algorithm().getName() : null;
+            case "algorithmVersion" -> context.algorithm() != null ? context.algorithm().getAlgorithmVersion() : null;
             case "modelName" -> context.algorithm() != null ? context.algorithm().getContainerName() : null;
             case "modelVersion" -> context.algorithm() != null ? context.algorithm().getContainerVersion() : null;
             case "measurementId", "dataPointsId" ->
@@ -363,9 +388,7 @@ public class AlgorithmDataPreparationService {
             case "to" -> isDateRangeContext(context) ? lastEndDateTime(context.selectionWindows()) : null;
             case "timestampLastEdit" -> latestRecordTimestamp(context.records());
             case TIMESTAMP_PROPERTY -> resolveRecordTimestamp(context);
-            case "batchId" -> truncateBatchId(context.biometricRecord() != null
-                    ? context.biometricRecord().getBatchId()
-                    : null);
+            case BATCH_ID_PROPERTY -> resolveBatchIdValue(context);
             case VALUE_PROPERTY -> resolveRecordPrimitiveValue(context);
             case HIGH_VALUE_PROPERTY -> resolveRecordHighValue(context);
             case LOW_VALUE_PROPERTY -> resolveRecordLowValue(context);
@@ -391,6 +414,10 @@ public class AlgorithmDataPreparationService {
             return null;
         }
 
+        if (resolveSchemaVocabulary(context, "type") == MeasurementVocabulary.OMOP) {
+            return resolveOmopVocabularyMeasurementType(context.measurement());
+        }
+
         if (DATASET_OBJECTS_PROPERTY.equals(context.currentContainerName()) && context.measurement().getType() != null) {
             return context.measurement().getType().name();
         }
@@ -408,6 +435,64 @@ public class AlgorithmDataPreparationService {
         }
 
         return context.measurement().getName();
+    }
+
+    /**
+     * Translates a measurement into the OMOP vocabulary (HEART_RATE / OXYGEN_SATURATION) for a "type" schema
+     * property that explicitly opts in via {@code "x-vocabulary": "OMOP"}. Inert for schemas that do not
+     * declare it.
+     */
+    private String resolveOmopVocabularyMeasurementType(final Measurement measurement) {
+        final BiometricMeasurementType biometricType =
+                BiometricMeasurementTypeMapper.fromMeasurementType(measurement.getType());
+        return switch (biometricType) {
+            case HEART_RATE -> "HEART_RATE";
+            case BLOOD_OXYGEN -> "OXYGEN_SATURATION";
+            default -> throw new DomainException(DomainExceptionCode.ALGORITHM_EXECUTION_UNSUPPORTED_MEASUREMENT_TYPE);
+        };
+    }
+
+    private String resolveBatchIdValue(final BuildContext context) {
+        final String truncated = truncateBatchId(context.biometricRecord() != null
+                ? context.biometricRecord().getBatchId()
+                : null);
+        if (truncated == null && hasSchemaFlag(context, BATCH_ID_PROPERTY, GENERATE_IF_MISSING_SCHEMA_FLAG)) {
+            return UUID.randomUUID().toString();
+        }
+        return truncated;
+    }
+
+    /**
+     * Checks whether the schema property named {@code propertyName}, as declared on the current container's
+     * own object schema, carries the given vendor-extension flag (e.g. {@code "x-generate-if-missing": true}).
+     */
+    private boolean hasSchemaFlag(final BuildContext context, final String propertyName, final String flagKey) {
+        if (context.currentContainerSchema() == null) {
+            return false;
+        }
+        return context.currentContainerSchema()
+                .path(SCHEMA_PROPERTIES_PROPERTY)
+                .path(propertyName)
+                .path(flagKey)
+                .asBoolean(false);
+    }
+
+    /**
+     * Reads the {@value #VOCABULARY_SCHEMA_KEY} value declared on the schema property named
+     * {@code propertyName} of the current container, or {@code null} when it is not declared.
+     */
+    private MeasurementVocabulary resolveSchemaVocabulary(final BuildContext context, final String propertyName) {
+        if (context.currentContainerSchema() == null) {
+            return null;
+        }
+        final JsonNode vocabularyNode = context.currentContainerSchema()
+                .path(SCHEMA_PROPERTIES_PROPERTY)
+                .path(propertyName)
+                .path(VOCABULARY_SCHEMA_KEY);
+        if (!vocabularyNode.isTextual()) {
+            return null;
+        }
+        return MeasurementVocabulary.valueOf(vocabularyNode.asText().toUpperCase());
     }
 
     private String resolveUnitValue(final BuildContext context) {
@@ -491,7 +576,7 @@ public class AlgorithmDataPreparationService {
         final ObjectNode measurementNode = OBJECT_MAPPER.createObjectNode();
         measurementNode.set("type", OBJECT_MAPPER.valueToTree(measurement.getName()));
 
-        final ArrayNode recordNodes = measurementNode.putArray("records");
+        final ArrayNode recordNodes = measurementNode.putArray(RECORDS_PROPERTY);
         for (BiometricRecord<?> biometricRecord : records) {
             recordNodes.add(serializeRecord(biometricRecord));
         }
@@ -538,7 +623,7 @@ public class AlgorithmDataPreparationService {
             );
         }
         if (biometricRecord.getBatchId() != null) {
-            dataPointNode.put("batchId", truncateBatchId(biometricRecord.getBatchId()));
+            dataPointNode.put(BATCH_ID_PROPERTY, truncateBatchId(biometricRecord.getBatchId()));
         }
 
         if (biometricRecord instanceof BasicBiometricRecord basicRecord) {
@@ -724,6 +809,61 @@ public class AlgorithmDataPreparationService {
         return selectionWindows;
     }
 
+    private boolean hasTimeBoundedSelectionWindows(final List<SelectionWindow> selectionWindows) {
+        if (selectionWindows == null || selectionWindows.isEmpty()) {
+            return false;
+        }
+
+        return selectionWindows.stream().anyMatch(this::isTimeBoundedSelectionWindow);
+    }
+
+    private boolean isTimeBoundedSelectionWindow(final SelectionWindow selectionWindow) {
+        return selectionWindow.startDateTime() != null
+                && !selectionWindow.startDateTime().isBlank()
+                && selectionWindow.endDateTime() != null
+                && !selectionWindow.endDateTime().isBlank();
+    }
+
+    private void validateMeasurementDataPresent(final JsonNode payload) {
+        if (countNonEmptyMeasurementCollections(payload) > 0) {
+            return;
+        }
+
+        throw new DomainException(DomainExceptionCode.ALGORITHM_EXECUTION_MEASUREMENT_DATA_MISSING);
+    }
+
+    private int countNonEmptyMeasurementCollections(final JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return 0;
+        }
+
+        int count = 0;
+        if (node.isObject()) {
+            if (hasNonEmptyArray(node, DATA_POINTS_PROPERTY) || hasNonEmptyArray(node, RECORDS_PROPERTY)) {
+                count++;
+            }
+
+            final Iterator<String> fieldNames = node.fieldNames();
+            while (fieldNames.hasNext()) {
+                count += countNonEmptyMeasurementCollections(node.get(fieldNames.next()));
+            }
+            return count;
+        }
+
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                count += countNonEmptyMeasurementCollections(child);
+            }
+        }
+
+        return count;
+    }
+
+    private boolean hasNonEmptyArray(final JsonNode node, final String propertyName) {
+        final JsonNode arrayNode = node.get(propertyName);
+        return arrayNode != null && arrayNode.isArray() && !arrayNode.isEmpty();
+    }
+
     private List<SelectionWindow> toSelectionWindows(final List<AnalysisSelection> selections) {
         if (selections == null || selections.isEmpty()) {
             return List.of();
@@ -790,7 +930,7 @@ public class AlgorithmDataPreparationService {
     }
 
     private boolean isRecordCollection(final String propertyName) {
-        return "records".equals(propertyName) || DATA_POINTS_PROPERTY.equals(propertyName);
+        return RECORDS_PROPERTY.equals(propertyName) || DATA_POINTS_PROPERTY.equals(propertyName);
     }
 
     private boolean isConfigurationObjectProperty(final String propertyName) {

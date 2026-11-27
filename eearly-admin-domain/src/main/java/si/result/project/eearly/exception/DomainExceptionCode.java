@@ -106,6 +106,8 @@ public enum DomainExceptionCode implements ExceptionCode {
 
   ALGORITHM_EXECUTION_NOT_FOUND("Algorithm execution not found", ExceptionReason.ENTITY_NOT_FOUND),
   ALGORITHM_EXECUTION_INVALID_INPUT_PARAMETERS("Algorithm execution input parameters are invalid", ExceptionReason.ILLEGAL_ARGUMENT),
+  ALGORITHM_EXECUTION_MEASUREMENT_DATA_MISSING("No measurement data found for the selected time window", ExceptionReason.ILLEGAL_STATE),
+  ALGORITHM_EXECUTION_UNSUPPORTED_MEASUREMENT_TYPE("Measurement type is not supported for this execution", ExceptionReason.ILLEGAL_ARGUMENT),
   INVALID_EXECUTION_STATUS_TRANSITION("Invalid execution status transition", ExceptionReason.ILLEGAL_ARGUMENT),
 
   ALGORITHM_INPUT_PREPARATION_FAILED("Failed to prepare algorithm input payload", ExceptionReason.RUNTIME),
