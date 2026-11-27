@@ -69,6 +69,9 @@ public class SecurityConfig {
             // open to any authenticated caller.
             .requestMatchers(HttpMethod.POST, "/api/v1/measurements").hasRole(AdminRoles.ADMINISTRATOR)
             .requestMatchers(HttpMethod.PUT, "/api/v1/measurements/*").hasRole(AdminRoles.ADMINISTRATOR)
+            // Health conditions are created by administrators only; reading them stays open to any
+            // authenticated caller.
+            .requestMatchers(HttpMethod.POST, "/api/v1/healthconditions").hasRole(AdminRoles.ADMINISTRATOR)
             // Service-to-service calls from the mobile backend (e.g. the language a patient picked
             // in the app), made with its own service account's token.
             .requestMatchers("/api/v1/internal/**").hasRole(AdminRoles.MOBILE_SERVICE)

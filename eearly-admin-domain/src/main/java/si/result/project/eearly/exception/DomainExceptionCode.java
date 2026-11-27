@@ -53,6 +53,9 @@ public enum DomainExceptionCode implements ExceptionCode {
   DEPARTMENT_NAME_NULL("Department name is null", ExceptionReason.ILLEGAL_ARGUMENT),
   DEPARTMENT_ORGANIZATION_NOT_FOUND("Department organization not found", ExceptionReason.ENTITY_NOT_FOUND),
 
+  HEALTH_CONDITION_NOT_FOUND("Health condition not found", ExceptionReason.ENTITY_NOT_FOUND),
+  HEALTH_CONDITION_NAME_NULL("Condition name is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
   MEASUREMENT_NOT_FOUND("Measurement not found", ExceptionReason.ENTITY_NOT_FOUND),
   MEASUREMENT_NAME_NULL("Measurement name is null", ExceptionReason.ILLEGAL_ARGUMENT),
   MEASUREMENT_TYPE_NULL("Measurement type is null", ExceptionReason.ILLEGAL_ARGUMENT),

@@ -5,6 +5,7 @@ import lombok.Getter;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 
 import java.time.LocalDate;
@@ -22,10 +23,10 @@ public class UpdatePatientCommand extends CreatePatientCommand {
                                 String city, String state, Integer zip, String country,
                                 String email, String phoneNumber, String language, List<Caretaker> caretakers,
                                 List<Measurement> measurements,
-                                List<Algorithm> algorithms) {
+                                List<HealthCondition> healthConditions, List<Algorithm> algorithms) {
         super(firstName, lastName, dateOfBirth, gender, healthInsuranceId, street,
                 city, state, zip, country, email, phoneNumber, language,
-                caretakers, measurements, algorithms);
+                caretakers, measurements, healthConditions, algorithms);
         this.id = id;
     }
 }

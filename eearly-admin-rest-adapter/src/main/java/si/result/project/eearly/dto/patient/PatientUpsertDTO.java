@@ -57,5 +57,7 @@ public record PatientUpsertDTO(
 
         List<UUID> measurementList,
 
+        List<UUID> healthConditionList,
+
         List<UUID> algorithmsList
 ) {}

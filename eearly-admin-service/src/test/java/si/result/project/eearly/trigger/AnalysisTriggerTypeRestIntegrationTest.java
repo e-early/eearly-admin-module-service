@@ -23,8 +23,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -92,6 +94,9 @@ class AnalysisTriggerTypeRestIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Test
     void createdAnalysisIsManualInResponseAndInDatabase() throws Exception {
         jdbc.update("INSERT INTO t_patient (id, first_name, last_name, date_of_birth, gender, health_insurance_id, "
@@ -102,7 +107,9 @@ class AnalysisTriggerTypeRestIntegrationTest {
         final var patientService = mock(PatientService.class);
         final PatientRepository patientRepository = patientDAO;
         final AlgorithmRepository algorithmRepository = algorithmDAO;
-        when(patientService.findById(PATIENT_ID)).thenReturn(patientRepository.findById(PATIENT_ID).orElseThrow());
+        // Loaded when the facade asks for it, inside the request's transaction (as in the running service), so
+        // that the patient's lazily loaded associations can be mapped.
+        when(patientService.findById(PATIENT_ID)).thenAnswer(invocation -> patientRepository.findById(PATIENT_ID).orElseThrow());
         final var algorithmService = mock(AlgorithmService.class);
         when(algorithmService.findById(ALGORITHM_ID))
                 .thenReturn(algorithmRepository.findById(ALGORITHM_ID).orElseThrow());
@@ -124,12 +131,18 @@ class AnalysisTriggerTypeRestIntegrationTest {
                 }
                 """.formatted(PATIENT_ID, ALGORITHM_ID);
 
-        final String response = mvc.perform(post("/api/v1/analyses")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.payload.triggerType").value("MANUAL"))
-                .andReturn().getResponse().getContentAsString();
+        final String response = new TransactionTemplate(transactionManager).execute(transaction -> {
+            try {
+                return mvc.perform(post("/api/v1/analyses")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.payload.triggerType").value("MANUAL"))
+                        .andReturn().getResponse().getContentAsString();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
 
         assertThat(response).contains("\"MANUAL\"");
         assertThat(jdbc.queryForObject("SELECT trigger_type::text FROM t_analysis WHERE name = 'Apnea detection'",

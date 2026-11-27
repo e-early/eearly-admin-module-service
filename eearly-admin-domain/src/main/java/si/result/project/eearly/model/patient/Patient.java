@@ -13,6 +13,7 @@ import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.auditable.Auditable;
 import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
 import si.result.project.eearly.model.patient.command.UpdatePatientCommand;
@@ -96,6 +97,14 @@ public class Patient extends Auditable {
     )
     private List<Measurement> measurements;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "t_patient_health_condition",
+            joinColumns = @JoinColumn(name = "patient_id"),
+            inverseJoinColumns = @JoinColumn(name = "condition_id")
+    )
+    private List<HealthCondition> healthConditions;
+
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "patient")
     private List<Analysis> analyses;
 
@@ -126,6 +135,7 @@ public class Patient extends Auditable {
         patient.changeLanguage(command.getLanguage());
         patient.setCaretakers(command.getCaretakers());
         patient.setMeasurements(command.getMeasurements());
+        patient.setHealthConditions(command.getHealthConditions());
         patient.setAlgorithms(command.getAlgorithms());
 
         return patient;
@@ -147,6 +157,7 @@ public class Patient extends Auditable {
         changeLanguage(command.getLanguage());
         setCaretakers(command.getCaretakers());
         setMeasurements(command.getMeasurements());
+        setHealthConditions(command.getHealthConditions());
         setAlgorithms(command.getAlgorithms());
     }
 
@@ -239,6 +250,10 @@ public class Patient extends Auditable {
 
     private void setMeasurements(List<Measurement> measurements) {
         this.measurements = measurements;
+    }
+
+    private void setHealthConditions(List<HealthCondition> healthConditions) {
+        this.healthConditions = healthConditions;
     }
 
     private void setAlgorithms(List<Algorithm> algorithms) {
