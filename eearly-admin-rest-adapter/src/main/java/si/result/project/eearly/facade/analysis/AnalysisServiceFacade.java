@@ -36,6 +36,8 @@ import si.result.project.eearly.model.analysis.DetectionBoxSources;
 import si.result.project.eearly.model.analysis.FeedbackState;
 import si.result.project.eearly.model.analysis.command.CreateAnalysisCommand;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
+import si.result.project.eearly.port.algorithmexecution.CallbackTokenService;
 import si.result.project.eearly.port.analysis.AnalysisDetectionBoxService;
 import si.result.project.eearly.port.analysis.AnalysisService;
 import si.result.project.eearly.port.patient.PatientService;
@@ -53,6 +55,8 @@ public class AnalysisServiceFacade {
     private final AnalysisMapper analysisMapper;
     private final PatientService patientService;
     private final AnalysisDetectionBoxService analysisDetectionBoxService;
+    private final AlgorithmExecutionService algorithmExecutionService;
+    private final CallbackTokenService callbackTokenService;
 
     @Transactional(readOnly = true)
     public PagedModel<AnalysisLiteDTO> getPage(final Filter filter, final Pageable pageable) {
@@ -118,6 +122,36 @@ public class AnalysisServiceFacade {
 
     @Transactional
     public AnalysisDTO updateResult(final UUID analysisId, final AnalysisResultCallbackDTO callback) {
+        return toAnalysisDto(applyResult(analysisId, callback).analysis());
+    }
+
+    /**
+     * Result reported from outside, by the HTTP endpoints. If the request was authenticated by a callback token (a
+     * non-null {@code callbackToken}) the token is verified against {@code analysisId} and used up, in this very
+     * transaction: a result that fails to process rolls the use of the token back, so the provider may retry with
+     * the same token. A request authenticated by a Keycloak JWT has no token and is not checked here.
+     *
+     * <p>The still-active execution of the analysis, if any, is completed (or failed, for a result in the ERROR
+     * state) with it, in the same transaction, so that it does not stay RUNNING until the stuck-execution sweep
+     * fails it.
+     */
+    @Transactional
+    public AnalysisDTO updateResult(
+            final UUID analysisId,
+            final AnalysisResultCallbackDTO callback,
+            final String callbackToken) {
+        if (callbackToken != null) {
+            callbackTokenService.verifyAndConsume(callbackToken, analysisId);
+        }
+        final AppliedResult applied = applyResult(analysisId, callback);
+        completeLinkedAlgorithmExecution(analysisId, applied.resolvedState(), callback);
+        return toAnalysisDto(applied.analysis());
+    }
+
+    private record AppliedResult(Analysis analysis, AnalysisState resolvedState) {
+    }
+
+    private AppliedResult applyResult(final UUID analysisId, final AnalysisResultCallbackDTO callback) {
         final Analysis analysis = analysisService.findById(analysisId);
         analysisDetectionBoxService.replaceAlgorithmDetections(
                 analysis,
@@ -132,7 +166,24 @@ public class AnalysisServiceFacade {
                 resolvedState,
                 resolveDetectedValue(callback)
         );
-        return toAnalysisDto(saved);
+        return new AppliedResult(saved, resolvedState);
+    }
+
+    private void completeLinkedAlgorithmExecution(
+            final UUID analysisId, final AnalysisState resolvedState, final AnalysisResultCallbackDTO callback) {
+        algorithmExecutionService.findLatestActiveByAnalysisId(analysisId).ifPresent(execution -> {
+            if (resolvedState == AnalysisState.ERROR) {
+                algorithmExecutionService.failFromCallback(execution.getId(), "Callback reported ERROR state");
+                return;
+            }
+            String resultData = null;
+            try {
+                resultData = JsonUtils.toJson(callback);
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize callback for AlgorithmExecution {}", execution.getId(), e);
+            }
+            algorithmExecutionService.completeFromCallback(execution.getId(), resultData);
+        });
     }
 
     /**

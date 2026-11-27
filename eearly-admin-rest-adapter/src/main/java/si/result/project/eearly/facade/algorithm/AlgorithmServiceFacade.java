@@ -19,6 +19,7 @@ import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService;
 import si.result.project.eearly.port.healthcondition.HealthConditionService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.patient.PatientService;
@@ -39,6 +40,7 @@ public class AlgorithmServiceFacade {
 
     private final AlgorithmService algorithmService;
     private final AlgorithmHttpClient algorithmHttpClient;
+    private final AlgorithmCredentialService algorithmCredentialService;
     private final PatientService patientService;
     private final MeasurementService measurementService;
     private final HealthConditionService healthConditionService;
@@ -140,8 +142,12 @@ public class AlgorithmServiceFacade {
         }
 
         try {
+            // The algorithm's own credentials when it has any, else the global ones of the client.
+            final var credentials = algorithmCredentialService.resolve(algorithm);
             final java.net.http.HttpResponse<String> response = algorithmHttpClient.send(
-                    "GET", algorithm.getHealthUrl(), null, HEALTH_CHECK_TIMEOUT_SECONDS);
+                    "GET", algorithm.getHealthUrl(), null, HEALTH_CHECK_TIMEOUT_SECONDS,
+                    credentials.map(AlgorithmCredentialService.AlgorithmCredentials::username).orElse(null),
+                    credentials.map(AlgorithmCredentialService.AlgorithmCredentials::password).orElse(null));
 
             log.info("Algorithm service health check {} -> {}", algorithm.getHealthUrl(), response.statusCode());
 

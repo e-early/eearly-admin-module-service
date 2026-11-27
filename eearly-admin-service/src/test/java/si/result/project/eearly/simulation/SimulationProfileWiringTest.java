@@ -15,7 +15,8 @@ import si.result.project.eearly.config.algorithm.AlgorithmHttpClient;
 import si.result.project.eearly.facade.algorithmexecution.AlgorithmSimulationService;
 import si.result.project.eearly.facade.algorithmexecution.HttpAlgorithmExecutionAdapter;
 import si.result.project.eearly.facade.analysis.AnalysisServiceFacade;
-import si.result.project.eearly.port.algorithmexecution.AlgorithmDataPreparationService;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService;
+import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionPayloadBuilder;
 import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
 import si.result.project.eearly.port.analysis.AnalysisService;
 import si.result.project.eearly.port.container.AlgorithmContainerService;
@@ -42,8 +43,13 @@ class SimulationProfileWiringTest {
         }
 
         @Bean
-        AlgorithmDataPreparationService algorithmDataPreparationService() {
-            return mock(AlgorithmDataPreparationService.class);
+        AlgorithmExecutionPayloadBuilder algorithmExecutionPayloadBuilder() {
+            return mock(AlgorithmExecutionPayloadBuilder.class);
+        }
+
+        @Bean
+        AlgorithmCredentialService algorithmCredentialService() {
+            return mock(AlgorithmCredentialService.class);
         }
 
         @Bean

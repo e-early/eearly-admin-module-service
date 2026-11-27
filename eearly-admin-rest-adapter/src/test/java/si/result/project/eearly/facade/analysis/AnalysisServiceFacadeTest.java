@@ -483,7 +483,9 @@ class AnalysisServiceFacadeTest {
                     null,
                     analysisMapper,
                     null,
-                    analysisDetectionBoxService);
+                    analysisDetectionBoxService,
+                    null,
+                    null);
         }
 
         @Test

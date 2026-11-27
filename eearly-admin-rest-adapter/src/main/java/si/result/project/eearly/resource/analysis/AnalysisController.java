@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import si.result.project.eearly.dto.analysis.AnalysisDTO;
@@ -33,6 +34,7 @@ import si.result.project.eearly.dto.analysis.CaretakerFeedbackSelectionsDTO;
 import si.result.project.eearly.dto.feedback.AnalysisFeedbacksResponseDTO;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.facade.analysis.AnalysisServiceFacade;
+import si.result.project.eearly.port.algorithmexecution.CallbackTokenService;
 import si.result.rest.filter.Filter;
 import si.result.rest.filter.annotation.PathFilter;
 import si.result.spring.boot.bricks.dto.ResponseDTO;
@@ -98,19 +100,34 @@ public class AnalysisController {
         return new ResponseDTO<>(analysisServiceFacade.appendCaretakerFeedbackDetections(id, body)).ok();
     }
 
+    @Operation(
+            summary = "Report the result of an analysis",
+            description = "Called by an algorithm provider. Authenticated by a Keycloak JWT, or, when callback tokens "
+                    + "are enabled, by the single-use callback token from the `token` query parameter of the "
+                    + "callback URL the provider was given.")
     @PostMapping(value = "/{id}/result", consumes = "application/json", produces = "application/json")
     public ResponseEntity<ResponseDTO<AnalysisDTO>> updateAnalysisResult(
             @PathVariable(name = "id") final UUID id,
-            @RequestBody final AnalysisResultCallbackDTO callback) {
-        return new ResponseDTO<>(analysisServiceFacade.updateResult(id, callback)).ok();
+            @RequestBody final AnalysisResultCallbackDTO callback,
+            @Parameter(hidden = true)
+            @RequestAttribute(name = CallbackTokenService.VERIFIED_TOKEN_ATTRIBUTE, required = false)
+            final String callbackToken) {
+        return new ResponseDTO<>(analysisServiceFacade.updateResult(id, callback, callbackToken)).ok();
     }
 
+    @Operation(
+            summary = "Report the result of an analysis, the analysis id being in the body",
+            description = "As the result endpoint of one analysis; the callback token, if used, must have been "
+                    + "issued for the analysis named in the body.")
     @PostMapping(value = "/results", consumes = "application/json", produces = "application/json")
     public ResponseEntity<ResponseDTO<AnalysisDTO>> updateAnalysisResultNoPath(
-            @RequestBody final AnalysisResultCallbackDTO callback) {
+            @RequestBody final AnalysisResultCallbackDTO callback,
+            @Parameter(hidden = true)
+            @RequestAttribute(name = CallbackTokenService.VERIFIED_TOKEN_ATTRIBUTE, required = false)
+            final String callbackToken) {
 
         UUID analysisId = callback.analysisId();
-        return new ResponseDTO<>(analysisServiceFacade.updateResult(analysisId, callback)).ok();
+        return new ResponseDTO<>(analysisServiceFacade.updateResult(analysisId, callback, callbackToken)).ok();
     }
 
     @Operation(

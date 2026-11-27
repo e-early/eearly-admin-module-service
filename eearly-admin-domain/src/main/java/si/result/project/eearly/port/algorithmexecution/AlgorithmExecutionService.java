@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -19,12 +20,22 @@ import si.result.project.eearly.model.algorithmexecution.AlgorithmExecutionTrigg
 import si.result.project.eearly.model.algorithmexecution.command.CreateAlgorithmExecutionCommand;
 import si.result.spring.boot.bricks.exception.DomainException;
 
+import java.time.ZonedDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AlgorithmExecutionService {
+
+    private static final List<AlgorithmExecutionStatus> ACTIVE_STATUSES = List.of(
+            AlgorithmExecutionStatus.PENDING,
+            AlgorithmExecutionStatus.SUBMITTED,
+            AlgorithmExecutionStatus.RUNNING
+    );
 
     private final AlgorithmExecutionRepository algorithmExecutionRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -67,6 +78,24 @@ public class AlgorithmExecutionService {
         return algorithmExecutionRepository.findAll(specification, pageable);
     }
 
+    /** The most recently created execution of the analysis that has not ended yet, if any. */
+    @Transactional(readOnly = true)
+    public Optional<AlgorithmExecution> findLatestActiveByAnalysisId(final UUID analysisId) {
+        final List<AlgorithmExecution> active = algorithmExecutionRepository.findByAnalysisIdAndExecutionStatusIn(
+                analysisId,
+                ACTIVE_STATUSES,
+                PageRequest.of(0, 1)
+        );
+        return active.isEmpty() ? Optional.empty() : Optional.of(active.getFirst());
+    }
+
+    /** Executions in one of the statuses that were last modified before the cutoff, with their analysis. */
+    @Transactional(readOnly = true)
+    public List<AlgorithmExecution> findStuckExecutions(
+            final Collection<AlgorithmExecutionStatus> statuses, final ZonedDateTime cutoff) {
+        return algorithmExecutionRepository.findStuckExecutions(statuses, cutoff);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AlgorithmExecution create(CreateAlgorithmExecutionCommand command) {
         log.info("Creating AlgorithmExecution: {}", command);
@@ -102,7 +131,38 @@ public class AlgorithmExecutionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markCompleted(UUID id, String resultData) {
+        complete(findById(id), resultData);
+    }
+
+    /**
+     * Completes the execution as {@link #markCompleted(UUID, String)} does, but in the <em>caller's</em>
+     * transaction (no new one is started). For the result callback, whose processing and use of the callback token
+     * must commit together: a separate transaction here would wait for the row lock the token's use holds.
+     * An execution that has not reached RUNNING yet is moved there first.
+     */
+    @Transactional
+    public void completeFromCallback(final UUID id, final String resultData) {
         final AlgorithmExecution execution = findById(id);
+        advanceToRunning(execution);
+        complete(execution, resultData);
+    }
+
+    /** Fails the execution as {@link #markFailed(UUID, String)} does, in the caller's transaction. */
+    @Transactional
+    public void failFromCallback(final UUID id, final String errorMessage) {
+        fail(id, findById(id), errorMessage);
+    }
+
+    private void advanceToRunning(final AlgorithmExecution execution) {
+        if (execution.getExecutionStatus() == AlgorithmExecutionStatus.PENDING) {
+            execution.updateStatus(AlgorithmExecutionStatus.SUBMITTED);
+        }
+        if (execution.getExecutionStatus() == AlgorithmExecutionStatus.SUBMITTED) {
+            execution.updateStatus(AlgorithmExecutionStatus.RUNNING);
+        }
+    }
+
+    private void complete(final AlgorithmExecution execution, final String resultData) {
         execution.setResultData(resultData);
         execution.setErrorMessage(null);
         execution.updateStatus(AlgorithmExecutionStatus.COMPLETED);
@@ -119,7 +179,10 @@ public class AlgorithmExecutionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(UUID id, String errorMessage) {
-        final AlgorithmExecution execution = findById(id);
+        fail(id, findById(id), errorMessage);
+    }
+
+    private void fail(final UUID id, final AlgorithmExecution execution, final String errorMessage) {
         if (execution.getExecutionStatus() == AlgorithmExecutionStatus.COMPLETED
                 || execution.getExecutionStatus() == AlgorithmExecutionStatus.CANCELLED
                 || execution.getExecutionStatus() == AlgorithmExecutionStatus.FAILED) {

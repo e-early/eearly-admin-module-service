@@ -111,6 +111,14 @@ public enum DomainExceptionCode implements ExceptionCode {
   INVALID_EXECUTION_STATUS_TRANSITION("Invalid execution status transition", ExceptionReason.ILLEGAL_ARGUMENT),
 
   ALGORITHM_INPUT_PREPARATION_FAILED("Failed to prepare algorithm input payload", ExceptionReason.RUNTIME),
+  ALGORITHM_CREDENTIALS_ENCRYPTION_NOT_CONFIGURED(
+      "Algorithm credentials cannot be stored: no encryption key is configured (algorithm.credentials.encryption-key)",
+      ExceptionReason.ILLEGAL_STATE),
+  ALGORITHM_CREDENTIALS_UNAVAILABLE(
+      "Stored algorithm credentials cannot be used: the encryption key is missing or does not match",
+      ExceptionReason.RUNTIME),
+  ALGORITHM_CREDENTIALS_PASSWORD_TOO_LONG("Algorithm password is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  CALLBACK_TOKEN_INVALID("Callback token is not valid", ExceptionReason.UNAUTHORIZED),
 
   MOBILE_SERVICE_REQUEST_FAILED("Request to Mobile Service failed", ExceptionReason.RUNTIME),
   MOBILE_USER_NOT_FOUND("User not found in Mobile Service", ExceptionReason.ENTITY_NOT_FOUND),

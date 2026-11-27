@@ -37,6 +37,8 @@ import si.result.project.eearly.facade.analysis.AnalysisServiceFacade;
 import si.result.project.eearly.mapper.analysis.AnalysisMapperImpl;
 import si.result.project.eearly.model.analysis.AnalysisTriggerType;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
+import si.result.project.eearly.port.algorithmexecution.CallbackTokenService;
 import si.result.project.eearly.port.algorithm.AlgorithmRepository;
 import si.result.project.eearly.port.analysis.AnalysisDetectionBoxService;
 import si.result.project.eearly.port.analysis.AnalysisService;
@@ -118,7 +120,9 @@ class AnalysisTriggerTypeRestIntegrationTest {
                 algorithmService,
                 new AnalysisMapperImpl(),
                 patientService,
-                mock(AnalysisDetectionBoxService.class));
+                mock(AnalysisDetectionBoxService.class),
+                mock(AlgorithmExecutionService.class),
+                mock(CallbackTokenService.class));
         final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalysisController(facade)).build();
 
         final String body = """

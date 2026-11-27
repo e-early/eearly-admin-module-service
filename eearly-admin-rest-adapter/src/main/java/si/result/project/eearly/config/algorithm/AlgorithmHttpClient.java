@@ -21,7 +21,19 @@ public class AlgorithmHttpClient {
 
     private final AlgorithmApiProperties properties;
 
+    /** Sends the request with the global credentials (Basic Auth, else the API key), if any are configured. */
     public HttpResponse<String> send(String method, String url, String body, long timeoutSeconds)
+            throws IOException, InterruptedException {
+        return send(method, url, body, timeoutSeconds, null, null);
+    }
+
+    /**
+     * Sends the request. If {@code authUsername} is given it is the algorithm's own Basic Auth login and the global
+     * credentials are not sent at all (they belong to another endpoint); otherwise the global ones apply.
+     * Neither the password nor any header is logged.
+     */
+    public HttpResponse<String> send(String method, String url, String body, long timeoutSeconds,
+                                     String authUsername, String authPassword)
             throws IOException, InterruptedException {
 
         final HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -29,7 +41,7 @@ public class AlgorithmHttpClient {
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header(HttpHeaders.ACCEPT, "application/json");
 
-        applyAuthorization(builder);
+        applyAuthorization(builder, authUsername, authPassword);
 
         if ("POST".equals(method)) {
             builder.header(HttpHeaders.CONTENT_TYPE, "application/json");
@@ -50,7 +62,13 @@ public class AlgorithmHttpClient {
         }
     }
 
-    private void applyAuthorization(HttpRequest.Builder builder) {
+    private void applyAuthorization(HttpRequest.Builder builder, String authUsername, String authPassword) {
+        if (authUsername != null && !authUsername.isBlank()) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Basic " + Base64.getEncoder().encodeToString(
+                    (authUsername + ":" + (authPassword != null ? authPassword : ""))
+                            .getBytes(StandardCharsets.UTF_8)));
+            return;
+        }
         final AlgorithmApiProperties.BasicAuth basicAuth = properties.getBasicAuth();
         if (basicAuth != null && basicAuth.getUsername() != null && !basicAuth.getUsername().isBlank()) {
             final String creds = basicAuth.getUsername() + ":" +
