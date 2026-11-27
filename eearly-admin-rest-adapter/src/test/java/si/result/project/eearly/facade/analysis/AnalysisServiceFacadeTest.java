@@ -5,8 +5,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,12 +22,15 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -33,12 +38,16 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.web.PagedModel;
 
 import si.result.project.eearly.dto.analysis.AnalysisDTO;
+import si.result.project.eearly.dto.analysis.AnalysisDetectionDTO;
 import si.result.project.eearly.dto.analysis.AnalysisFeedbackDTO;
 import si.result.project.eearly.dto.analysis.AnalysisLiteDTO;
+import si.result.project.eearly.dto.analysis.AnalysisResultCallbackDTO;
 import si.result.project.eearly.dto.analysis.DetectionFeedbackDTO;
 import si.result.project.eearly.dto.analysis.DetectionIntervalUpdateDTO;
 import si.result.project.eearly.dto.feedback.AnalysisFeedbacksResponseDTO;
 import si.result.project.eearly.dto.feedback.DetectionBoxFeedbackDTO;
+import si.result.project.eearly.event.notification.event.AnalysisErrorEvent;
+import si.result.project.eearly.event.notification.event.AnalysisReadyEvent;
 import si.result.project.eearly.mapper.analysis.AnalysisMapper;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.algorithm.AlgorithmCategoryType;
@@ -51,6 +60,7 @@ import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
 import si.result.project.eearly.port.analysis.AnalysisDetectionBoxService;
+import si.result.project.eearly.port.analysis.AnalysisRepository;
 import si.result.project.eearly.port.analysis.AnalysisService;
 import si.result.rest.filter.Filter;
 
@@ -272,7 +282,311 @@ class AnalysisServiceFacadeTest {
 
             assertNotNull(result);
             verify(analysisDetectionBoxService).updateCaretakerFeedback(testId, detectionId, FeedbackState.CONFIRMED);
-            verify(analysisDetectionBoxService).findActiveByAnalysisId(any());
+            verify(analysisService, never()).updateState(any(), any());
+            verify(analysisDetectionBoxService, atLeastOnce()).findActiveByAnalysisId(any());
+        }
+
+        @Test
+        @DisplayName("Should keep WAITING_FOR_CONFIRMATION when some algorithm boxes lack feedback")
+        void updateDetectionFeedback_WhenNotAllBoxesHaveFeedback_ShouldNotComplete() {
+            UUID detectionId = UUID.randomUUID();
+            Analysis analysis = createWaitingAnalysis();
+            AnalysisDetectionBox reviewed = algorithmBox(FeedbackState.CONFIRMED);
+            AnalysisDetectionBox pending = algorithmBox(null);
+
+            when(analysisService.findById(testId)).thenReturn(analysis);
+            when(analysisDetectionBoxService.findActiveByAnalysisId(testId))
+                    .thenReturn(List.of(reviewed, pending));
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            analysisServiceFacade.updateDetectionFeedback(
+                    testId, detectionId, new DetectionFeedbackDTO(FeedbackState.CONFIRMED));
+
+            verify(analysisService, never()).updateState(any(), any());
+        }
+
+        @Test
+        @DisplayName("Should set COMPLETED when all algorithm boxes have feedback, ignoring caretaker boxes")
+        void updateDetectionFeedback_WhenAllBoxesHaveFeedback_ShouldComplete() {
+            UUID detectionId = UUID.randomUUID();
+            Analysis analysis = createWaitingAnalysis();
+            final List<AnalysisDetectionBox> boxes = List.of(
+                    algorithmBox(FeedbackState.CONFIRMED),
+                    algorithmBox(FeedbackState.REJECTED),
+                    caretakerBox(null));
+
+            when(analysisService.findById(testId)).thenReturn(analysis);
+            when(analysisDetectionBoxService.findActiveByAnalysisId(testId)).thenReturn(boxes);
+            when(analysisService.updateState(testId, AnalysisState.COMPLETED)).thenReturn(analysis);
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            analysisServiceFacade.updateDetectionFeedback(
+                    testId, detectionId, new DetectionFeedbackDTO(FeedbackState.CONFIRMED));
+
+            verify(analysisService).updateState(testId, AnalysisState.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("Should not complete when analysis is not WAITING_FOR_CONFIRMATION")
+        void updateDetectionFeedback_WhenNotWaiting_ShouldNotComplete() {
+            UUID detectionId = UUID.randomUUID();
+            Analysis analysis = createTestAnalysis();
+            final List<AnalysisDetectionBox> boxes = List.of(algorithmBox(FeedbackState.CONFIRMED));
+
+            when(analysisService.findById(testId)).thenReturn(analysis);
+            when(analysisDetectionBoxService.findActiveByAnalysisId(testId)).thenReturn(boxes);
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            analysisServiceFacade.updateDetectionFeedback(
+                    testId, detectionId, new DetectionFeedbackDTO(FeedbackState.CONFIRMED));
+
+            verify(analysisService, never()).updateState(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Should complete after detection feedback helpers")
+    class ShouldCompleteAfterDetectionFeedbackTest {
+
+        @Test
+        void shouldComplete_WhenNotWaiting_ReturnsFalse() {
+            assertFalse(AnalysisServiceFacade.shouldCompleteAfterDetectionFeedback(
+                    createTestAnalysis(), List.of(algorithmBox(FeedbackState.CONFIRMED))));
+        }
+
+        @Test
+        void allAlgorithmDetectionsHaveFeedback_IgnoresCaretakerBoxes() {
+            assertTrue(AnalysisServiceFacade.allAlgorithmDetectionsHaveFeedback(List.of(
+                    algorithmBox(FeedbackState.CONFIRMED), caretakerBox(null))));
+        }
+
+        @Test
+        void allAlgorithmDetectionsHaveFeedback_WhenPending_ReturnsFalse() {
+            assertFalse(AnalysisServiceFacade.allAlgorithmDetectionsHaveFeedback(List.of(
+                    algorithmBox(FeedbackState.CONFIRMED), algorithmBox(null))));
+        }
+
+        @Test
+        void allAlgorithmDetectionsHaveFeedback_OnlyCaretakerBoxes_ReturnsFalse() {
+            assertFalse(AnalysisServiceFacade.allAlgorithmDetectionsHaveFeedback(
+                    List.of(caretakerBox(FeedbackState.CONFIRMED))));
+        }
+
+        @Test
+        void allAlgorithmDetectionsHaveFeedback_NoBoxes_ReturnsFalse() {
+            assertFalse(AnalysisServiceFacade.allAlgorithmDetectionsHaveFeedback(List.of()));
+        }
+    }
+
+    @Nested
+    @DisplayName("Update result (algorithm callback)")
+    class UpdateResultTest {
+
+        @Test
+        @DisplayName("Should resolve WAITING_FOR_CONFIRMATION and derive detected when callback omits it")
+        void updateResult_shouldDeriveDetected_whenCallbackDetectedIsNull() {
+            when(analysisService.findById(testId)).thenReturn(testAnalysis);
+            when(analysisService.updateResult(eq(testId), any(), any())).thenReturn(testAnalysis);
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            final AnalysisResultCallbackDTO callback = new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.COMPLETED, null, "model",
+                    List.of(mock(AnalysisDetectionDTO.class)));
+
+            analysisServiceFacade.updateResult(testId, callback);
+
+            verify(analysisService).updateResult(testId, AnalysisState.WAITING_FOR_CONFIRMATION, true);
+        }
+
+        @Test
+        @DisplayName("Should resolve COMPLETED when the callback has no detections")
+        void updateResult_shouldComplete_whenNoDetections() {
+            when(analysisService.findById(testId)).thenReturn(testAnalysis);
+            when(analysisService.updateResult(eq(testId), any(), any())).thenReturn(testAnalysis);
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            final AnalysisResultCallbackDTO callback = new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.WAITING_FOR_CONFIRMATION, true, "model", List.of());
+
+            analysisServiceFacade.updateResult(testId, callback);
+
+            verify(analysisService).updateResult(testId, AnalysisState.COMPLETED, true);
+        }
+
+        @Test
+        @DisplayName("Should keep ERROR when the callback reports ERROR")
+        void updateResult_shouldKeepError() {
+            when(analysisService.findById(testId)).thenReturn(testAnalysis);
+            when(analysisService.updateResult(eq(testId), any(), any())).thenReturn(testAnalysis);
+            when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            final AnalysisResultCallbackDTO callback = new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.ERROR, false, "model",
+                    List.of(mock(AnalysisDetectionDTO.class)));
+
+            analysisServiceFacade.updateResult(testId, callback);
+
+            verify(analysisService).updateResult(testId, AnalysisState.ERROR, false);
+        }
+
+        @Test
+        @DisplayName("Should persist predictions and resolve the state from the detections")
+        void persistAlgorithmPredictions_shouldResolveState() {
+            when(analysisService.findById(testId)).thenReturn(testAnalysis);
+
+            analysisServiceFacade.persistAlgorithmPredictions(
+                    testId, true, List.of(mock(AnalysisDetectionDTO.class)), null);
+            verify(analysisService).updateResult(testId, AnalysisState.WAITING_FOR_CONFIRMATION, true);
+
+            analysisServiceFacade.persistAlgorithmPredictions(testId, false, List.of(), null);
+            verify(analysisService).updateResult(testId, AnalysisState.COMPLETED, false);
+        }
+    }
+
+    @Nested
+    @DisplayName("Notification events after algorithm result (real AnalysisService)")
+    class ResultEventsTest {
+
+        private final UUID patientId = UUID.randomUUID();
+        private final AtomicReference<AnalysisState> persistedState = new AtomicReference<>();
+        private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        private AnalysisServiceFacade facadeWithRealService;
+
+        @BeforeEach
+        void wire() {
+            final Patient patient = mock(Patient.class);
+            lenient().when(patient.getId()).thenReturn(patientId);
+            final Analysis analysis = mock(Analysis.class);
+            lenient().when(analysis.getId()).thenReturn(testId);
+            lenient().when(analysis.getPatient()).thenReturn(patient);
+            lenient().when(analysis.getFeedback()).thenReturn(FeedbackState.NONE);
+            lenient().when(analysis.getState()).thenAnswer(invocation -> persistedState.get());
+            doAnswer(invocation -> {
+                persistedState.set(invocation.getArgument(0));
+                return null;
+            }).when(analysis).applyAlgorithmResult(any(), any());
+
+            final AnalysisRepository repository = mock(AnalysisRepository.class);
+            lenient().when(repository.findById(testId)).thenReturn(Optional.of(analysis));
+            lenient().when(repository.save(any(Analysis.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            lenient().when(analysisMapper.toDTO(any(Analysis.class), any(AnalysisState.class), anyList()))
+                    .thenReturn(mock(AnalysisDTO.class));
+
+            facadeWithRealService = new AnalysisServiceFacade(
+                    new AnalysisService(repository, eventPublisher),
+                    null,
+                    analysisMapper,
+                    null,
+                    analysisDetectionBoxService,
+                    null,
+                    null);
+        }
+
+        @Test
+        @DisplayName("Should publish AnalysisReadyEvent when the callback carries detections")
+        void updateResult_withDetections_publishesReadyEvent() {
+            facadeWithRealService.updateResult(testId, new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.COMPLETED, null, "model",
+                    List.of(mock(AnalysisDetectionDTO.class))));
+
+            assertEquals(AnalysisState.WAITING_FOR_CONFIRMATION, persistedState.get());
+            verify(eventPublisher).publishEvent(new AnalysisReadyEvent(testId, patientId));
+        }
+
+        @Test
+        @DisplayName("Should publish AnalysisReadyEvent when predictions are persisted with detections")
+        void persistAlgorithmPredictions_withDetections_publishesReadyEvent() {
+            facadeWithRealService.persistAlgorithmPredictions(
+                    testId, true, List.of(mock(AnalysisDetectionDTO.class)), null);
+
+            assertEquals(AnalysisState.WAITING_FOR_CONFIRMATION, persistedState.get());
+            verify(eventPublisher).publishEvent(new AnalysisReadyEvent(testId, patientId));
+        }
+
+        @Test
+        @DisplayName("Should publish no event when there are no detections (COMPLETED)")
+        void updateResult_withoutDetections_publishesNoEvent() {
+            facadeWithRealService.updateResult(testId, new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.WAITING_FOR_CONFIRMATION, true, "model", List.of()));
+
+            assertEquals(AnalysisState.COMPLETED, persistedState.get());
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
+        }
+
+        @Test
+        @DisplayName("Should publish AnalysisErrorEvent when the callback reports ERROR")
+        void updateResult_error_publishesErrorEvent() {
+            facadeWithRealService.updateResult(testId, new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.ERROR, false, "model",
+                    List.of(mock(AnalysisDetectionDTO.class))));
+
+            assertEquals(AnalysisState.ERROR, persistedState.get());
+            verify(eventPublisher).publishEvent(new AnalysisErrorEvent(testId, patientId));
+        }
+    }
+
+    @Nested
+    @DisplayName("Resolve detected value after algorithm result")
+    class ResolveDetectedValueTest {
+
+        @Test
+        void resolveDetectedValue_ReturnsCallbackValue_whenSet() {
+            final AnalysisResultCallbackDTO callback = new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.COMPLETED, false, "model",
+                    List.of(mock(AnalysisDetectionDTO.class)));
+
+            assertFalse(AnalysisServiceFacade.resolveDetectedValue(callback));
+        }
+
+        @Test
+        void resolveDetectedValue_NullDetected_WithDetections_ReturnsTrue() {
+            final AnalysisResultCallbackDTO callback = new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.WAITING_FOR_CONFIRMATION, null, "model",
+                    List.of(mock(AnalysisDetectionDTO.class)));
+
+            assertTrue(AnalysisServiceFacade.resolveDetectedValue(callback));
+        }
+
+        @Test
+        void resolveDetectedValue_NullDetected_WithoutDetections_ReturnsFalse() {
+            assertFalse(AnalysisServiceFacade.resolveDetectedValue(new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.COMPLETED, null, "model", List.of())));
+            assertFalse(AnalysisServiceFacade.resolveDetectedValue(new AnalysisResultCallbackDTO(
+                    UUID.randomUUID(), testId, AnalysisState.COMPLETED, null, "model", null)));
+        }
+    }
+
+    @Nested
+    @DisplayName("Resolve state after algorithm result")
+    class ResolveStateAfterAlgorithmResultTest {
+
+        @Test
+        void resolveState_EmptyOrNullDetections_ReturnsCompleted() {
+            assertEquals(AnalysisState.COMPLETED, AnalysisServiceFacade.resolveStateAfterAlgorithmResult(
+                    AnalysisState.WAITING_FOR_CONFIRMATION, List.of()));
+            assertEquals(AnalysisState.COMPLETED, AnalysisServiceFacade.resolveStateAfterAlgorithmResult(
+                    AnalysisState.COMPLETED, null));
+        }
+
+        @Test
+        void resolveState_WithDetections_ReturnsWaitingForConfirmation() {
+            assertEquals(AnalysisState.WAITING_FOR_CONFIRMATION,
+                    AnalysisServiceFacade.resolveStateAfterAlgorithmResult(
+                            AnalysisState.COMPLETED, List.of(new Object())));
+        }
+
+        @Test
+        void resolveState_Error_ReturnsError() {
+            assertEquals(AnalysisState.ERROR, AnalysisServiceFacade.resolveStateAfterAlgorithmResult(
+                    AnalysisState.ERROR, List.of(new Object())));
+            assertEquals(AnalysisState.ERROR, AnalysisServiceFacade.resolveStateAfterAlgorithmResult(
+                    AnalysisState.ERROR, List.of()));
         }
     }
 
@@ -534,6 +848,28 @@ class AnalysisServiceFacadeTest {
         lenient().when(analysis.getState()).thenReturn(AnalysisState.IN_PROGRESS);
         lenient().when(analysis.getFeedback()).thenReturn(FeedbackState.NONE);
         return analysis;
+    }
+
+    private Analysis createWaitingAnalysis() {
+        Analysis analysis = mock(Analysis.class);
+        lenient().when(analysis.getId()).thenReturn(testId);
+        lenient().when(analysis.getState()).thenReturn(AnalysisState.WAITING_FOR_CONFIRMATION);
+        lenient().when(analysis.getFeedback()).thenReturn(FeedbackState.NONE);
+        return analysis;
+    }
+
+    private AnalysisDetectionBox algorithmBox(FeedbackState feedback) {
+        AnalysisDetectionBox box = mock(AnalysisDetectionBox.class);
+        lenient().when(box.getSource()).thenReturn("MODEL_PREDICTION");
+        lenient().when(box.getCaretakerFeedback()).thenReturn(feedback);
+        return box;
+    }
+
+    private AnalysisDetectionBox caretakerBox(FeedbackState feedback) {
+        AnalysisDetectionBox box = mock(AnalysisDetectionBox.class);
+        lenient().when(box.getSource()).thenReturn("CARETAKER");
+        lenient().when(box.getCaretakerFeedback()).thenReturn(feedback);
+        return box;
     }
 
     private AnalysisFeedbackDTO createTestFeedbackDTO() {

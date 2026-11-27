@@ -34,6 +34,24 @@ public record CreateAlgorithmCommand(
         BigDecimal costPerExecution,
         Currency currency,
         String billingCode,
-        String licenseType
+        String licenseType,
+        String authUsername,
+        /** As submitted by the caller, in clear text; the service replaces it with the encrypted value before it is stored. */
+        String authPassword
 ) {
+
+    /** The same command with the password to store (the encrypted one). */
+    public CreateAlgorithmCommand withAuthPassword(final String storedPassword) {
+        return new CreateAlgorithmCommand(name, description, algorithmVersion, category, status, containerName,
+                containerVersion, serviceEndpoint, runEndpoint, cancelEndpoint, healthCheckEndpoint, runnerConfig,
+                inputSchema, outputSchema, author, patients, measurements, healthConditions, pricingModel,
+                costPerExecution, currency, billingCode, licenseType, authUsername, storedPassword);
+    }
+
+    /** Without the password, which must never reach a log. */
+    @Override
+    public String toString() {
+        return "CreateAlgorithmCommand[name=" + name + ", algorithmVersion=" + algorithmVersion
+                + ", serviceEndpoint=" + serviceEndpoint + ", authUsername=" + authUsername + ", authPassword=***]";
+    }
 }

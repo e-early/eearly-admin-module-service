@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import si.result.project.eearly.dto.algorithm.AlgorithmDTO;
 import si.result.project.eearly.dto.algorithm.AlgorithmStatusDTO;
@@ -28,8 +29,14 @@ public interface AlgorithmMapper {
 
     ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @Mapping(target = "authPasswordSet",
+            expression = "java(si.result.project.eearly.port.algorithm.AlgorithmCredentialService.hasPassword(algorithm))")
     AlgorithmDTO toDTO(final Algorithm algorithm);
 
+    // The stored password is ciphertext and never goes into a response.
+    @Mapping(target = "authPassword", ignore = true)
+    @Mapping(target = "authPasswordSet",
+            expression = "java(si.result.project.eearly.port.algorithm.AlgorithmCredentialService.hasPassword(algorithm))")
     AlgorithmUpsertDTO toUpsertDTO(final Algorithm algorithm);
 
     AlgorithmStatusDTO toStatusDTO(final Algorithm algorithm);

@@ -144,6 +144,80 @@ SPRING_PROFILES_ACTIVE=development,unrestricted,simulation java -jar eearly-admi
 
 ---
 
+## Webhook-style algorithm providers (optional)
+
+By default the service calls an algorithm and waits for the answer in the HTTP response. A provider that needs
+longer can instead answer `202 Accepted` and report the result later to
+`POST {SERVICE_DOMAIN_URL}/api/v1/analyses/{analysisId}/result?token=...`. This is **off until you configure a
+secret**; without one nothing below applies and the service behaves exactly as before (Keycloak JWT only on every
+endpoint).
+
+### Callback token
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_CALLBACK_TOKEN_SECRET` | empty (off) | HMAC-SHA256 secret, at least 32 bytes. A shorter value stops the start-up. |
+| `ALGORITHM_CALLBACK_TOKEN_TTL` | `PT15M` | How long a token is valid (ISO-8601 duration). |
+
+Generate a secret and keep it out of version control:
+
+```bash
+export ALGORITHM_CALLBACK_TOKEN_SECRET="$(openssl rand -base64 48)"
+```
+
+With a secret set:
+
+- the callback URL sent to the provider carries a signed token that is bound to one execution and one analysis and
+  can be used **once**; a new execution gets a new token;
+- `POST /api/v1/analyses/{id}/result` and `POST /api/v1/analyses/results` accept **either** a valid Keycloak JWT
+  **or** a valid token in the `token` query parameter. All other endpoints still need a JWT, and a request with
+  neither is answered `401` before it reaches the application;
+- a token that is expired, already used, forged or issued for another analysis is answered `401` with the same
+  message, whatever the reason;
+- the token is used up in the same database transaction that stores the result, so a result that fails to process
+  can be sent again with the same token;
+- the query parameter `token` (and a few similar ones, such as `access_token` and `password`) is masked as
+  `token=***` in the request log. Do not put the full callback URL into logs of your own.
+
+A provider that answers `202` while no secret is set cannot call back: the service logs a warning and the execution
+stays `RUNNING` until the sweep below fails it.
+
+### Stuck executions
+
+An execution that is still `SUBMITTED` or `RUNNING` after the timeout is marked `FAILED`, and its analysis (if it is
+still open) is set to `ERROR`.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_STUCK_SWEEP_ENABLED` | `true` | Switch the sweep off with `false`. |
+| `ALGORITHM_STUCK_SWEEP_POLL_INTERVAL_MS` | `300000` | How often it looks. |
+| `ALGORITHM_STUCK_SWEEP_TIMEOUT_MINUTES` | `90` | Age after which an execution counts as stuck. |
+
+The timeout must be longer than the HTTP timeout towards the algorithm (`BENTOML_TIMEOUT`, default 3600 s);
+otherwise the service refuses to start, so that a call that is still being waited for is never failed.
+
+### Credentials per algorithm
+
+An algorithm can have its own Basic authentication username and password for its service endpoint. They are used
+instead of the global `ALGORITHM_BASIC_AUTH_*` / `BENTOML_API_KEY` for that algorithm, for calls, cancellation and
+health checks. Send `authUsername` and `authPassword` when you create or update the algorithm; send nothing to leave
+them unchanged, or an empty string to remove them.
+
+The password is stored encrypted (AES-256-GCM) and is never returned by the API or written to the log; the API only
+says whether one is stored (`authPasswordSet`). Encryption needs a key:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_CREDENTIALS_ENCRYPTION_KEY` | empty | Base64 of exactly 32 bytes. |
+
+```bash
+export ALGORITHM_CREDENTIALS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+Without a key, setting a password is refused with a clear error and a stored password cannot be used (the call fails
+with a message instead of falling back to the global credentials). Keep the key: with another key a stored password
+can no longer be read and has to be entered again.
+
 ## Seed data (`development` profile)
 
 Flyway loads `db/migration` + `db/test-data`.

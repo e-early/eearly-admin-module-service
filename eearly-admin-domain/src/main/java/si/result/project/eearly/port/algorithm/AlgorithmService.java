@@ -23,6 +23,7 @@ import java.util.UUID;
 public class AlgorithmService {
 
     private final AlgorithmRepository algorithmRepository;
+    private final AlgorithmCredentialService algorithmCredentialService;
 
     public Algorithm findById(UUID id) {
         return algorithmRepository.findById(id)
@@ -42,7 +43,10 @@ public class AlgorithmService {
 
     public Algorithm create(CreateAlgorithmCommand command) {
         log.info("Creating algorithm: {}", command);
-        final var algorithm = Algorithm.create(command);
+        final var username = algorithmCredentialService.resolveUsername(command.authUsername(), null);
+        final var algorithm = Algorithm.create(command.withAuthPassword(
+                algorithmCredentialService.protectPassword(command.authPassword(), null, username)));
+        algorithm.setAuthUsername(username);
         log.debug("Algorithm crated with ID: {}", algorithm.getId());
         return algorithmRepository.save(algorithm);
     }
@@ -51,7 +55,10 @@ public class AlgorithmService {
         final var existing = algorithmRepository.findById(command.id())
                 .orElseThrow(() -> new DomainException(DomainExceptionCode.ALGORITHM_NOT_FOUND));
 
-        existing.update(command);
+        final var username = algorithmCredentialService.resolveUsername(command.authUsername(), existing.getAuthUsername());
+        final var storedPassword = algorithmCredentialService.protectPassword(
+                command.authPassword(), existing.getAuthPassword(), username);
+        existing.update(command.withCredentials(username, storedPassword));
 
         return algorithmRepository.save(existing);
     }

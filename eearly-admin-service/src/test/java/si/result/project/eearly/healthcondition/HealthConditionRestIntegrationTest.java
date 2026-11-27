@@ -39,7 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import si.result.project.eearly.config.AlgorithmCredentialsProperties;
 import si.result.project.eearly.config.algorithm.AlgorithmHttpClient;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialCipher;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService;
 import si.result.project.eearly.dao.algorithm.AlgorithmDAO;
 import si.result.project.eearly.dao.healthcondition.HealthConditionDAO;
 import si.result.project.eearly.dao.measurement.MeasurementDAO;
@@ -120,7 +123,12 @@ class HealthConditionRestIntegrationTest {
 
         @Bean
         AlgorithmService algorithmService(AlgorithmDAO algorithmDAO) {
-            return new AlgorithmService(algorithmDAO);
+            return new AlgorithmService(algorithmDAO, algorithmCredentialService());
+        }
+
+        @Bean
+        AlgorithmCredentialService algorithmCredentialService() {
+            return new AlgorithmCredentialService(new AlgorithmCredentialCipher(new AlgorithmCredentialsProperties()));
         }
 
         @Bean
@@ -154,7 +162,7 @@ class HealthConditionRestIntegrationTest {
         AlgorithmServiceFacade algorithmServiceFacade(AlgorithmService algorithmService, PatientService patientService,
                 MeasurementService measurementService, HealthConditionService healthConditionService,
                 AlgorithmMapper algorithmMapper) {
-            return new AlgorithmServiceFacade(algorithmService, mock(AlgorithmHttpClient.class), patientService,
+            return new AlgorithmServiceFacade(algorithmService, mock(AlgorithmHttpClient.class), algorithmCredentialService(), patientService,
                     measurementService, healthConditionService, algorithmMapper);
         }
     }

@@ -40,7 +40,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -444,6 +446,152 @@ class AlgorithmDataPreparationServiceTest {
         assertTrue(json.path("measurements").get(1).path("dataPoints").get(0).path("value").isNull());
     }
 
+    private static String omopVocabularySchema() {
+        return """
+                {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "measurements": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "measurementId": { "type": "string", "format": "uuid" },
+                          "type": { "type": "string", "x-vocabulary": "OMOP" },
+                          "ehrObservationId": { "type": "string" },
+                          "unit": { "type": "string" },
+                          "dataPoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "timestamp": { "type": "string", "format": "date-time" },
+                                "batchId": { "type": "string", "x-generate-if-missing": true },
+                                "value": { "type": ["number", "null"] }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+    }
+
+    @Test
+    void shouldTranslateMeasurementTypeToOmopVocabulary_whenSchemaOptsIn() throws Exception {
+        final UUID heartRateId = UUID.randomUUID();
+        final UUID oxygenSaturationId = UUID.randomUUID();
+
+        final Measurement heartRate = measurement(
+                heartRateId, "Heart rate", MeasurementType.HEART_RATE, "openEHR-EHR-OBSERVATION.pulse.v2");
+        final Measurement oxygenSaturation = measurement(
+                oxygenSaturationId, "SpO2", MeasurementType.OXYGEN_SATURATION,
+                "openEHR-EHR-OBSERVATION.pulse_oximetry.v1");
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final Algorithm algorithm = algorithm(
+                omopVocabularySchema(), List.of(heartRate, oxygenSaturation));
+
+        when(biometricRecordService.findAll(anyBiometricFilterCommand()))
+                .thenReturn(records(
+                        BasicBiometricRecord.builder()
+                                .timestamp(ZonedDateTime.of(2026, 2, 12, 7, 0, 0, 0, ZoneOffset.UTC))
+                                .batchId("batch-hr")
+                                .value(new BasicValue(72.0))
+                                .build()
+                ))
+                .thenReturn(records(
+                        BasicBiometricRecord.builder()
+                                .timestamp(ZonedDateTime.of(2026, 2, 12, 7, 0, 1, 0, ZoneOffset.UTC))
+                                .value(new BasicValue(98.0))
+                                .build()
+                ));
+
+        final String result = algorithmDataPreparationService.prepareInputData(patient, algorithm);
+        final JsonNode json = OBJECT_MAPPER.readTree(result);
+
+        assertEquals("HEART_RATE", json.path("measurements").get(0).path("type").asText());
+        assertEquals("batch-hr", json.path("measurements").get(0).path("dataPoints").get(0).path("batchId").asText());
+
+        assertEquals("OXYGEN_SATURATION", json.path("measurements").get(1).path("type").asText());
+        final String generatedBatchId =
+                json.path("measurements").get(1).path("dataPoints").get(0).path("batchId").asText();
+        assertTrue(generatedBatchId != null && !generatedBatchId.isBlank());
+        assertDoesNotThrow(() -> UUID.fromString(generatedBatchId));
+    }
+
+    @Test
+    void shouldPreserveDefaultMeasurementTypeAndBatchId_whenSchemaDoesNotOptIn() throws Exception {
+        final Measurement heartRate = measurement(
+                UUID.randomUUID(), "Heart rate", MeasurementType.HEART_RATE, "openEHR-EHR-OBSERVATION.pulse.v2");
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final String schemaWithoutOmopFlags = """
+                {
+                  "type": "object",
+                  "properties": {
+                    "measurements": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "type": { "type": "string" },
+                          "dataPoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "batchId": { "type": "string" },
+                                "value": { "type": ["number", "null"] }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+        final Algorithm algorithm = algorithm(schemaWithoutOmopFlags, List.of(heartRate));
+
+        when(biometricRecordService.findAll(anyBiometricFilterCommand()))
+                .thenReturn(records(
+                        BasicBiometricRecord.builder()
+                                .timestamp(ZonedDateTime.of(2026, 2, 12, 7, 0, 0, 0, ZoneOffset.UTC))
+                                .value(new BasicValue(72.0))
+                                .build()
+                ));
+
+        final String result = algorithmDataPreparationService.prepareInputData(patient, algorithm);
+        final JsonNode json = OBJECT_MAPPER.readTree(result);
+
+        assertEquals("HEART_RATE", json.path("measurements").get(0).path("type").asText());
+        assertTrue(json.path("measurements").get(0).path("dataPoints").get(0).path("batchId").isMissingNode());
+    }
+
+    @Test
+    void shouldThrowUnsupportedMeasurementType_whenOmopVocabularyRequestedForIneligibleMeasurement() {
+        final Measurement bloodGlucose = measurement(
+                UUID.randomUUID(), "Blood glucose", MeasurementType.BLOOD_GLUCOSE, "openEHR-EHR-OBSERVATION.glucose.v1");
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final Algorithm algorithm = algorithm(omopVocabularySchema(), List.of(bloodGlucose));
+
+        when(biometricRecordService.findAll(anyBiometricFilterCommand()))
+                .thenReturn(records(
+                        BasicBiometricRecord.builder()
+                                .timestamp(ZonedDateTime.of(2026, 2, 12, 7, 0, 0, 0, ZoneOffset.UTC))
+                                .value(new BasicValue(90.0))
+                                .build()
+                ));
+
+        final DomainException exception = assertThrows(DomainException.class,
+                () -> algorithmDataPreparationService.prepareInputData(patient, algorithm));
+
+        assertEquals(DomainExceptionCode.ALGORITHM_EXECUTION_UNSUPPORTED_MEASUREMENT_TYPE, exception.getCode());
+    }
+
     @Test
     void shouldWriteAlgorithmNameIntoAlgorithmNamePropertyWhenSchemaUsesThatField() throws Exception {
         final UUID algorithmId = UUID.randomUUID();
@@ -469,6 +617,32 @@ class AlgorithmDataPreparationServiceTest {
         assertEquals(algorithmId.toString(), json.path("algorithm").path("algorithmId").asText());
         assertEquals("Apnea detection", json.path("algorithm").path("algorithmName").asText());
         assertTrue(json.path("algorithm").path("name").isMissingNode());
+    }
+
+    @Test
+    void shouldWriteAlgorithmVersionIntoAlgorithmVersionPropertyWhenSchemaUsesThatField() throws Exception {
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final Algorithm algorithm = algorithm("""
+                {
+                  "type": "object",
+                  "properties": {
+                    "algorithm": {
+                      "type": "object",
+                      "properties": {
+                        "algorithmName": { "type": "string" },
+                        "algorithmVersion": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+                """, List.of(), UUID.randomUUID(), "Apnea detection");
+        when(algorithm.getAlgorithmVersion()).thenReturn("2.3.1");
+
+        final String result = algorithmDataPreparationService.prepareInputData(patient, algorithm);
+        final JsonNode json = OBJECT_MAPPER.readTree(result);
+
+        assertEquals("Apnea detection", json.path("algorithm").path("algorithmName").asText());
+        assertEquals("2.3.1", json.path("algorithm").path("algorithmVersion").asText());
     }
 
     @Test
@@ -864,6 +1038,132 @@ class AlgorithmDataPreparationServiceTest {
         );
 
         assertEquals(DomainExceptionCode.ALGORITHM_INVALID_INPUT_SCHEMA, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectScheduledWindowWithoutMeasurementData() {
+        final UUID heartRateId = UUID.randomUUID();
+        final Measurement heartRate = measurement(
+                heartRateId,
+                "Heart rate",
+                MeasurementType.HEART_RATE,
+                "openEHR-EHR-OBSERVATION.pulse.v2"
+        );
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final Algorithm algorithm = algorithm(
+                """
+                {
+                  "type": "object",
+                  "properties": {
+                    "analysisPayload": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "datasetObjects": { "type": "array" }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                List.of(heartRate),
+                UUID.randomUUID(),
+                "Apnea detection"
+        );
+
+        when(biometricRecordService.findAll(anyBiometricFilterCommand())).thenReturn(emptyRecords());
+        final UUID executionId = UUID.randomUUID();
+
+        final DomainException exception = assertThrows(
+                DomainException.class,
+                () -> algorithmDataPreparationService.prepareInputData(
+                        patient,
+                        algorithm,
+                        "2026-02-12T08:00:00+01:00",
+                        "2026-02-12T08:01:39+01:00",
+                        executionId,
+                        null,
+                        null,
+                        null
+                )
+        );
+
+        assertEquals(DomainExceptionCode.ALGORITHM_EXECUTION_MEASUREMENT_DATA_MISSING, exception.getCode());
+    }
+
+    @Test
+    void shouldSkipMeasurementsWithoutRecords_whenSelectionWindowIsTimeBounded() throws Exception {
+        final UUID heartRateId = UUID.randomUUID();
+        final UUID oxygenSaturationId = UUID.randomUUID();
+        final Measurement heartRate = measurement(
+                heartRateId, "Heart rate", MeasurementType.HEART_RATE, "openEHR-EHR-OBSERVATION.pulse.v2");
+        final Measurement oxygenSaturation = measurement(
+                oxygenSaturationId, "SpO2", MeasurementType.OXYGEN_SATURATION,
+                "openEHR-EHR-OBSERVATION.pulse_oximetry.v1");
+        final Patient patient = patient(UUID.randomUUID(), null);
+        final Algorithm algorithm = algorithm(omopVocabularySchema(), List.of(heartRate, oxygenSaturation));
+
+        when(biometricRecordService.findAll(anyBiometricFilterCommand()))
+                .thenReturn(records(basicRecord("2026-02-12T08:00:00+01:00", "b1", 70.0, "beats/min")))
+                .thenReturn(emptyRecords());
+
+        final String result = algorithmDataPreparationService.prepareInputData(
+                patient, algorithm,
+                "2026-02-12T08:00:00+01:00", "2026-02-12T08:01:39+01:00",
+                UUID.randomUUID(), null, null, null);
+        final JsonNode json = OBJECT_MAPPER.readTree(result);
+
+        assertEquals(1, json.path("measurements").size());
+        assertEquals(heartRateId.toString(), json.path("measurements").get(0).path("measurementId").asText());
+    }
+
+    private static String analysisPayloadSchema(final boolean declareDoctorsId) {
+        return """
+                {
+                  "type": "object",
+                  "properties": {
+                    "analysisPayload": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "analysisId": { "type": "string", "format": "uuid" },
+                          "caretakersId": { "type": "string", "format": "uuid" }%s
+                        }
+                      }
+                    }
+                  }
+                }
+                """.formatted(declareDoctorsId ? ",\n                          \"doctorsId\": { \"type\": \"string\" }" : "");
+    }
+
+    @Test
+    void shouldNotAddDoctorsIdAlias_whenSchemaDoesNotDeclareIt() throws Exception {
+        final UUID caretakerId = UUID.randomUUID();
+        final Patient patient = patient(UUID.randomUUID(), null, caretakerId);
+        final Algorithm algorithm = algorithm(analysisPayloadSchema(false), List.of());
+
+        final JsonNode payload = OBJECT_MAPPER
+                .readTree(algorithmDataPreparationService.prepareInputData(patient, algorithm))
+                .path("analysisPayload").get(0);
+
+        assertEquals(caretakerId.toString(), payload.path("caretakersId").asText());
+        assertFalse(payload.has("doctorsId"));
+    }
+
+    @Test
+    void shouldFillDoctorsId_whenSchemaDeclaresIt() throws Exception {
+        final UUID caretakerId = UUID.randomUUID();
+        final Patient patient = patient(UUID.randomUUID(), null, caretakerId);
+        final Algorithm algorithm = algorithm(analysisPayloadSchema(true), List.of());
+
+        final JsonNode payload = OBJECT_MAPPER
+                .readTree(algorithmDataPreparationService.prepareInputData(patient, algorithm))
+                .path("analysisPayload").get(0);
+
+        assertEquals(caretakerId.toString(), payload.path("caretakersId").asText());
+        assertEquals(caretakerId.toString(), payload.path("doctorsId").asText());
     }
 
     @Test

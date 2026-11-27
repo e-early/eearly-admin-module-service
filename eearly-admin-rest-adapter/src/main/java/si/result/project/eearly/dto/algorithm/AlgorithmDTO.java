@@ -81,5 +81,12 @@ public record AlgorithmDTO (
 
     @Schema
     List<HealthConditionLiteDTO> healthConditions
+    ,
+
+    @Schema(example = "sample-user-42", description = "Basic Auth username for the algorithm's service endpoint.")
+    String authUsername,
+
+    @Schema(description = "Whether a password is stored for the algorithm. The password itself is never returned.")
+    Boolean authPasswordSet
 
 ){}

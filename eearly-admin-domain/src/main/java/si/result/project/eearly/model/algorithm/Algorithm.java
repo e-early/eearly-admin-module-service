@@ -111,6 +111,14 @@ public class Algorithm extends Auditable {
     @Column(name = "license_type", length = 100)
     private String licenseType;
 
+    // --- Credentials for the algorithm's own service endpoint ---
+    @Column(name = "auth_username")
+    private String authUsername;
+
+    /** The AES-GCM ciphertext of the password, never the password itself (see AlgorithmCredentialCipher). */
+    @Column(name = "auth_password")
+    private String authPassword;
+
     @ManyToMany(fetch = FetchType.LAZY, mappedBy = "algorithms")
     private List<Patient> patients;
 
@@ -154,6 +162,8 @@ public class Algorithm extends Auditable {
                 .currency(command.currency())
                 .billingCode(command.billingCode())
                 .licenseType(command.licenseType())
+                .authUsername(command.authUsername())
+                .authPassword(command.authPassword())
 
                 .patients(command.patients())
                 .measurements(command.measurements())
@@ -183,6 +193,8 @@ public class Algorithm extends Auditable {
         setCurrency(command.currency());
         setBillingCode(command.billingCode());
         setLicenseType(command.licenseType());
+        setAuthUsername(command.authUsername());
+        setAuthPassword(command.authPassword());
 
         setPatients(command.patients());
         setMeasurements(command.measurements());
