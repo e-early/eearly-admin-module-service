@@ -28,6 +28,7 @@ import si.result.project.eearly.util.JsonUtils;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -50,6 +51,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class HttpAlgorithmExecutionAdapterTest {
 
+    private static final byte[] LOOPBACK = {127, 0, 0, 1};
+
     @Mock
     private AlgorithmExecutionService algorithmExecutionService;
 
@@ -70,7 +73,10 @@ class HttpAlgorithmExecutionAdapterTest {
     @BeforeEach
     void setUp() throws IOException {
         stubServer = new StubRemoteServer();
-        server = HttpServer.create(new InetSocketAddress(0), 0);
+        // Bind to the IPv4 loopback address and call exactly that address. A wildcard bind plus the host name
+        // "localhost" can reach a different listener that owns the same port on another loopback address
+        // (seen as an "Invalid status line" from a foreign service), which made these tests flaky.
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getByAddress(LOOPBACK), 0), 0);
         server.createContext("/healthz", stubServer::handleHealthz);
         server.createContext("/run", stubServer::handleRun);
         server.createContext("/tasks", stubServer::handleTasks);
@@ -97,6 +103,10 @@ class HttpAlgorithmExecutionAdapterTest {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    private String baseUrl() {
+        return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
     @Test
@@ -389,7 +399,7 @@ class HttpAlgorithmExecutionAdapterTest {
                 .algorithm(Algorithm.builder()
                         .id(UUID.randomUUID())
                         .name("Test algorithm")
-                        .serviceEndpoint("http://localhost:" + server.getAddress().getPort())
+                        .serviceEndpoint(baseUrl())
                         .runEndpoint("/run")
                         .cancelEndpoint("/tasks/{taskId}")
                         .healthCheckEndpoint("/healthz")
@@ -412,7 +422,7 @@ class HttpAlgorithmExecutionAdapterTest {
                 .algorithm(Algorithm.builder()
                         .id(UUID.randomUUID())
                         .name("Test algorithm")
-                        .serviceEndpoint("http://localhost:" + server.getAddress().getPort())
+                        .serviceEndpoint(baseUrl())
                         .runEndpoint("/run")
                         .cancelEndpoint("/tasks/{taskId}")
                         .healthCheckEndpoint("/healthz")
@@ -431,7 +441,7 @@ class HttpAlgorithmExecutionAdapterTest {
                 .algorithm(Algorithm.builder()
                         .id(UUID.randomUUID())
                         .name("Test algorithm")
-                        .serviceEndpoint("http://localhost:" + server.getAddress().getPort())
+                        .serviceEndpoint(baseUrl())
                         .runEndpoint("/run")
                         .cancelEndpoint("/tasks/{taskId}")
                         .build())

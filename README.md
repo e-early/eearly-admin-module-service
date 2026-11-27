@@ -12,7 +12,8 @@ Supports:
 
 - **QR code onboarding** (`/api/v1/qrcodes`, see [QR code onboarding](#qr-code-onboarding))
 
-Does **not** include organization/department/health-condition management or development simulation.
+Does **not** include organization/department/health-condition management. Algorithm executions can be simulated
+without algorithm containers with the `simulation` profile (see [Algorithm simulation](#algorithm-simulation)).
 The QR code message is sent through the e-mail infrastructure (see [E-mail](#e-mail)).
 
 ---
@@ -122,6 +123,24 @@ java -jar eearly-admin-service/target/eearly-admin-service.jar \
 - Health: `http://localhost:9000/actuator/health`
 
 Profile `unrestricted` = no JWT required on admin REST (local testing).
+
+### Algorithm simulation
+
+Profile `simulation` runs analyses without any algorithm container. It replaces the HTTP adapter to the
+algorithm containers with a stand-in that, a few seconds after an execution is created, stores two fixed demo
+detections on the linked analysis (state `WAITING_FOR_CONFIRMATION`) and completes the execution.
+
+```bash
+SPRING_PROFILES_ACTIVE=development,unrestricted,simulation java -jar eearly-admin-service/target/eearly-admin-service.jar
+```
+
+- **The results are fabricated demo data, not the output of a model. Never use this profile with real patients
+  or for clinical decisions.** A warning is logged at startup.
+- Executions completed by the simulation carry the result data `{"source":"simulation"}`. The analysis itself and its
+  detections are not marked, so do not mix simulated and real data in one database.
+- Only executions linked to an analysis are simulated; an execution without one is marked as failed.
+- `simulation.delay-ms` (default `3000`) sets the simulated processing time.
+- Without the profile nothing changes: the real adapter is used and no simulation bean exists.
 
 ---
 
