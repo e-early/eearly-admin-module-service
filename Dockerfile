@@ -12,6 +12,6 @@ FROM eclipse-temurin:21-jdk
 
 WORKDIR /app
 
-COPY --from=build /build/eearly-admin-service/target/eearly-admin-service.jar eearly-admin-service.jar
+COPY --from=build /build/eearly-admin-app/target/eearly-admin-service.jar eearly-admin-service.jar
 
 CMD ["java", "-jar", "/app/eearly-admin-service.jar"]

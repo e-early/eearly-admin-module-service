@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.core.env.Environment;
+import si.result.project.eearly.config.CoreDefaultsEnvironmentPostProcessor;
 import si.result.project.eearly.config.email.EmailConfig;
 import si.result.project.eearly.port.email.EmailProperties;
 
@@ -19,6 +20,9 @@ class EmailConfigurationBindingTest {
 
     private final ApplicationContextRunner shipped = new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
+            // ApplicationContextRunner does not run EnvironmentPostProcessors; apply the core defaults as the app does
+            .withInitializer(context -> new CoreDefaultsEnvironmentPostProcessor()
+                    .postProcessEnvironment(context.getEnvironment(), null))
             .withUserConfiguration(EmailConfig.class)
             .withPropertyValues(APP);
 
@@ -42,16 +46,6 @@ class EmailConfigurationBindingTest {
             assertThat(env.getProperty("spring.mail.properties.mail.smtp.auth")).isEqualTo("false");
             assertThat(env.getProperty("spring.mail.properties.mail.smtp.starttls.enable")).isEqualTo("false");
             assertThat(env.getProperty("spring.mail.properties.mail.smtp.ssl.enable")).isEqualTo("false");
-        });
-    }
-
-    @Test
-    void developmentProfile_pointsToALocalCatchAllServer() {
-        shipped.withPropertyValues("spring.profiles.active=development").run(context -> {
-            Environment env = context.getEnvironment();
-            assertThat(env.getProperty("spring.mail.host")).isEqualTo("localhost");
-            assertThat(env.getProperty("spring.mail.port")).isEqualTo("1025");
-            assertThat(context.getBean(EmailProperties.class).from()).isEqualTo("noreply@example.org");
         });
     }
 

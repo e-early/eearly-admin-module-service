@@ -114,7 +114,7 @@ mvn clean package -Dmaven.test.skip=true
 ### 4. Run
 
 ```bash
-java -jar eearly-admin-service/target/eearly-admin-service.jar \
+java -jar eearly-admin-app/target/eearly-admin-service.jar \
   --spring.profiles.active=development,unrestricted
 ```
 
@@ -124,6 +124,13 @@ java -jar eearly-admin-service/target/eearly-admin-service.jar \
 
 Profile `unrestricted` = no JWT required on admin REST (local testing).
 
+The runnable application is the `eearly-admin-app` module (main class `si.result.project.eearly.EEarlyAdminApplication`;
+in an IDE run that class, or `mvn -pl eearly-admin-app -am spring-boot:run`). The `eearly-admin-service` module is a
+plain library jar with all configuration, the e-mail templates and the core defaults
+(`eearly-admin-defaults.yaml`). The defaults are added with the lowest precedence, so the application's own
+`application.yaml`, profile files (such as `application-development.yaml` in `eearly-admin-app`), environment variables
+and command-line arguments override them.
+
 ### Algorithm simulation
 
 Profile `simulation` runs analyses without any algorithm container. It replaces the HTTP adapter to the
@@ -131,7 +138,7 @@ algorithm containers with a stand-in that, a few seconds after an execution is c
 detections on the linked analysis (state `WAITING_FOR_CONFIRMATION`) and completes the execution.
 
 ```bash
-SPRING_PROFILES_ACTIVE=development,unrestricted,simulation java -jar eearly-admin-service/target/eearly-admin-service.jar
+SPRING_PROFILES_ACTIVE=development,unrestricted,simulation java -jar eearly-admin-app/target/eearly-admin-service.jar
 ```
 
 - **The results are fabricated demo data, not the output of a model. Never use this profile with real patients
@@ -367,7 +374,8 @@ endpoints if exposed.
 
 ```text
 eearly-admin/
-├── eearly-admin-service/              Spring Boot app (run this)
+├── eearly-admin-app/                  runnable Spring Boot app (run this): main class + app settings
+├── eearly-admin-service/              library: configuration, core defaults (eearly-admin-defaults.yaml), tests
 ├── eearly-admin-rest-adapter/         REST + facades + HTTP model client
 ├── eearly-admin-domain/               domain model + ports
 ├── eearly-admin-persistence-adapter/  JPA + Flyway

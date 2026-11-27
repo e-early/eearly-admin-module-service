@@ -161,7 +161,7 @@ export APNEA_SERVICE_ENDPOINT=http://<apnea-service-host>:3001
 export ALGORITHM_BASIC_AUTH_USERNAME=eearly-bentoml_auth_user
 export ALGORITHM_BASIC_AUTH_PASSWORD='<plaintext password from your team / Ansible vault>'
 
-java -jar eearly-admin-service/target/eearly-admin-service.jar \
+java -jar eearly-admin-app/target/eearly-admin-service.jar \
   --spring.profiles.active=development,unrestricted
 ```
 

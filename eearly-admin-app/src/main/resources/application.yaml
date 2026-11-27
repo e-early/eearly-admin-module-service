@@ -1,0 +1,6 @@
+# Application-level settings only. The core defaults (datasource, security, e-mail, algorithm settings, ...) come from
+# eearly-admin-defaults.yaml in the eearly-admin-service library, with the lowest precedence: anything set here, in
+# a profile file, in an environment variable or on the command line overrides them.
+spring:
+  application:
+    name: eearly-admin-service

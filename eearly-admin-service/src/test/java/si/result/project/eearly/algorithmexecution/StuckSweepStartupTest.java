@@ -10,7 +10,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import si.result.project.eearly.EEarlyAdminService;
+import si.result.project.eearly.config.async.AsyncConfig;
+import si.result.project.eearly.config.scheduling.SchedulingConfig;
 import si.result.project.eearly.config.AlgorithmExecutionStuckSweepProperties;
 import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
 import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionStuckSweepService;
@@ -90,8 +91,8 @@ class StuckSweepStartupTest {
     @Test
     @DisplayName("Scheduling is enabled in the application, so the @Scheduled sweep actually runs")
     void schedulingIsEnabledInTheApplication() {
-        assertThat(EEarlyAdminService.class.isAnnotationPresent(EnableScheduling.class)).isTrue();
-        assertThat(EEarlyAdminService.class.isAnnotationPresent(EnableAsync.class)).isTrue();
+        assertThat(SchedulingConfig.class.isAnnotationPresent(EnableScheduling.class)).isTrue();
+        assertThat(AsyncConfig.class.isAnnotationPresent(EnableAsync.class)).isTrue();
     }
 
     private static String rootMessage(final Throwable throwable) {
