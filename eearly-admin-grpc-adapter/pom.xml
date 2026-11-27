@@ -4,7 +4,7 @@
     <parent>
         <groupId>si.result.eearly</groupId>
         <artifactId>eearly-admin</artifactId>
-        <version>0.11.4-SNAPSHOT</version>
+        <version>1.0.0-alpha.1</version>
     </parent>
 
     <artifactId>eearly-admin-grpc-adapter</artifactId>
