@@ -34,9 +34,9 @@ import si.result.spring.boot.bricks.auth.AuthenticationProvider;
 import si.result.spring.boot.bricks.auth.AuthenticationProviderImpl;
 
 /**
- * {@code /api/v1/mobile/*} is open to anonymous callers in {@link SecurityConfig}. The service has no endpoint there:
- * what an anonymous caller gets is the answer for a path nothing handles, and nothing of the service's data. How the
- * app is set up from a QR code is the mobile backend's business (its onboarding endpoints), not this service's.
+ * {@code /api/v1/mobile/*} is no longer open to anonymous callers in {@link SecurityConfig}: the service has no
+ * endpoint there, and an anonymous request is answered with 401 like any other. How the app is set up from a QR code
+ * is the mobile backend's business (its onboarding endpoints), not this service's.
  */
 @WebMvcTest
 @ContextConfiguration(classes = {SecurityConfig.class, MobileEndpointSecurityTest.Auth.class})
@@ -97,22 +97,21 @@ class MobileEndpointSecurityTest {
     }
 
     @Test
-    @DisplayName("An anonymous caller is let through to /api/v1/mobile/<one segment>, where nothing answers")
-    void anonymous_reachesNothingUnderMobile() throws Exception {
+    @DisplayName("An anonymous caller gets 401 for /api/v1/mobile/<one segment> with every method")
+    void anonymous_isUnauthorizedUnderMobile() throws Exception {
         for (final String path : new String[] {"/api/v1/mobile/token", "/api/v1/mobile/onboarding", "/api/v1/mobile/1"}) {
             for (final var request : List.of(get(path), post(path).contentType(MediaType.APPLICATION_JSON).content("{}"),
                     put(path).contentType(MediaType.APPLICATION_JSON).content("{}"), delete(path))) {
                 final var result = mockMvc.perform(request).andReturn().getResponse();
 
-                // Not turned away by the security rules, and nothing but an error answers.
-                assertThat(result.getStatus()).isNotIn(200, 201, 204, 401, 403);
+                assertThat(result.getStatus()).isEqualTo(401);
                 assertThat(result.getContentAsString()).doesNotContain("token\":\"").doesNotContain("payload");
             }
         }
     }
 
     @Test
-    @DisplayName("Anything else, including deeper paths under /api/v1/mobile, needs authentication")
+    @DisplayName("Anything else under or near /api/v1/mobile needs authentication too")
     void everythingElse_needsAuthentication() throws Exception {
         for (final String path : new String[] {"/api/v1/mobile", "/api/v1/mobile/a/b",
                 "/api/v1/mobiles/a", "/api/v1/internal/patients/1/language", "/api/v1/qrcodes", "/api/v1/patients",

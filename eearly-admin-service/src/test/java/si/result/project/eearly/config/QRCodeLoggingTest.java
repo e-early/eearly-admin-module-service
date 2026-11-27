@@ -1,11 +1,16 @@
 package si.result.project.eearly.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.time.OffsetDateTime;
@@ -25,6 +30,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestTemplate;
+import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.model.mobile.CreateMobileUserCommand;
+import si.result.project.eearly.port.mobile.MobileKeycloakService;
+import si.result.project.eearly.port.mobile.MobileServiceService;
+import si.result.spring.boot.bricks.exception.DomainException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.context.annotation.Import;
@@ -151,5 +165,65 @@ class QRCodeLoggingTest {
         assertThat(output.getAll()).doesNotContain(QR_TOKEN).doesNotContain("d31f6b0a")
                 .doesNotContain("DistinctiveImageBytes").doesNotContain(ONBOARDING_URL).doesNotContain("c7b2e9d4")
                 .doesNotContain(BEARER);
+    }
+
+    @Test
+    @DisplayName("Creating a code without an onboarding URL in the request, and the refusals of that path, log no link or credential")
+    void theIssuedLinkPathLogsNoLinkAndNoCredential(CapturedOutput output) throws Exception {
+        final String bearer = "Bearer " + BEARER;
+        final String createBody = "{\"patientId\":\"" + PATIENT_ID + "\"}";
+
+        mockMvc.perform(post("/api/v1/qrcodes").header("Authorization", bearer)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody)).andExpect(status().isCreated());
+        org.mockito.Mockito.doThrow(new DomainException(DomainExceptionCode.PATIENT_NOT_ONBOARDED)).when(facade).create(any());
+        mockMvc.perform(post("/api/v1/qrcodes").header("Authorization", bearer)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody)).andExpect(status().isBadRequest());
+        org.mockito.Mockito.doThrow(new DomainException(DomainExceptionCode.MOBILE_USER_NOT_FOUND)).when(facade).create(any());
+        mockMvc.perform(post("/api/v1/qrcodes").header("Authorization", bearer)
+                .contentType(MediaType.APPLICATION_JSON).content(createBody)).andExpect(status().isNotFound());
+        org.mockito.Mockito.doThrow(new DomainException(DomainExceptionCode.QR_CODE_NOT_ACTIVE)).when(facade).sendQRCodeByEmailAsync(any());
+        mockMvc.perform(post("/api/v1/qrcodes/send-email").header("Authorization", bearer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"qrCodeId\":\"" + QR_CODE_ID + "\"}")).andExpect(status().isBadRequest());
+
+        assertThat(output.getAll()).contains("/api/v1/qrcodes");
+        assertThat(output.getAll()).doesNotContain(QR_TOKEN).doesNotContain("DistinctiveImageBytes")
+                .doesNotContain(ONBOARDING_URL).doesNotContain("c7b2e9d4").doesNotContain(BEARER);
+    }
+
+    @Test
+    @DisplayName("The mobile service client logs no onboarding link, answer body or token, for successes and failures")
+    void mobileServiceFailuresLogNoLinkAndNoBody(CapturedOutput output) {
+        final RestTemplate restTemplate = new RestTemplateBuilder().rootUri("http://mobile.test/api/v1").build();
+        final MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        final MobileKeycloakService keycloak = mock(MobileKeycloakService.class);
+        final String clientToken = "client-token-8b41d7e2";
+        when(keycloak.getAccessTokenForClient()).thenReturn(clientToken);
+        final MobileServiceService service = new MobileServiceService(restTemplate, keycloak);
+        final String endpoint = "http://mobile.test/api/v1/onboarding/users/" + KEYCLOAK_ID + "/onboarding-link";
+        final String answer = "{\"onboardingUrl\":\"" + ONBOARDING_URL + "\"}";
+
+        server.expect(requestTo(endpoint)).andRespond(withSuccess(answer, MediaType.APPLICATION_JSON));
+        assertThat(service.issueOnboardingLink(KEYCLOAK_ID)).isEqualTo(ONBOARDING_URL);
+        server.reset();
+        server.expect(requestTo(endpoint)).andRespond(withStatus(HttpStatus.NOT_FOUND).body(answer)
+                .contentType(MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> service.issueOnboardingLink(KEYCLOAK_ID)).isInstanceOf(DomainException.class);
+        server.reset();
+        server.expect(requestTo(endpoint)).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR).body(answer)
+                .contentType(MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> service.issueOnboardingLink(KEYCLOAK_ID)).isInstanceOf(DomainException.class);
+        server.reset();
+        server.expect(requestTo(endpoint)).andRespond(withSuccess("{broken " + ONBOARDING_URL, MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> service.issueOnboardingLink(KEYCLOAK_ID)).isInstanceOf(DomainException.class);
+        server.reset();
+        server.expect(requestTo("http://mobile.test/api/v1/onboarding/create-user")).andRespond(
+                withStatus(HttpStatus.BAD_GATEWAY).body(answer).contentType(MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> service.createUser(new CreateMobileUserCommand("A", "B", "a@example.org"), clientToken))
+                .isInstanceOf(DomainException.class);
+
+        assertThat(output.getAll()).contains("404").contains("500").contains("502");
+        assertThat(output.getAll()).doesNotContain(ONBOARDING_URL).doesNotContain("c7b2e9d4")
+                .doesNotContain("onboardingUrl").doesNotContain(clientToken);
     }
 }

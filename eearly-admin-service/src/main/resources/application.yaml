@@ -93,6 +93,15 @@ qrcode:
   # App-link page the QR code points at (for example https://app.example.org/onboarding); blank = the onboarding URL
   # of the request itself, which app versions before the link handler need.
   link-base-url: ${QR_CODE_LINK_BASE_URL:}
+  # The onboarding link a QR code encodes is issued by the mobile service and must be an https URL; plain http
+  # is for local development only.
+  allow-http-onboarding-url: ${QR_CODE_ALLOW_HTTP_ONBOARDING_URL:false}
+
+onboarding:
+  code:
+    # How long a QR code (and the onboarding link in it) is valid, as an ISO-8601 duration. Keep it equal to the
+    # validity of the mobile service's onboarding links (its onboarding.code.validity).
+    validity: ${ONBOARDING_CODE_VALIDITY:P30D}
 
 email:
   # Sender address of every message

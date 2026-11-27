@@ -1,8 +1,10 @@
 package si.result.project.eearly.qrcode;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -89,6 +91,7 @@ import si.result.project.eearly.port.caretaker.CaretakerService;
 import si.result.project.eearly.port.email.AsyncEmailService;
 import si.result.project.eearly.port.email.EmailProperties;
 import si.result.project.eearly.port.email.EmailService;
+import si.result.project.eearly.port.mobile.MobileServiceService;
 import si.result.project.eearly.port.email.EmailTemplateService;
 import si.result.project.eearly.port.notification.NotificationService;
 import si.result.project.eearly.port.notification.SseNotificationPublisher;
@@ -119,6 +122,7 @@ import si.result.spring.boot.bricks.auth.AuthenticationProvider;
         // The first test context of a JVM initialises logging for all later ones (the log format
         // characterization test reads service.name), so name the application as the service does.
         "spring.application.name=eearly-admin-service",
+        "onboarding.code.validity=P10D",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.hibernate.naming.physical-strategy=org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl"
 })
@@ -138,6 +142,12 @@ class QRCodeRestIntegrationTest {
         @Bean
         AuthenticationProvider authenticationProvider() {
             return mock(AuthenticationProvider.class);
+        }
+
+        // The mobile service is not called: it issues a fresh link per request, as the real one does.
+        @Bean
+        MobileServiceService mobileServiceService() {
+            return mock(MobileServiceService.class);
         }
 
         @Bean
@@ -237,9 +247,9 @@ class QRCodeRestIntegrationTest {
         QRCodeServiceFacade qrCodeServiceFacade(QRCodeService qrCodeService, PatientService patientService,
                 QRCodeUtilityService utilityService, QRCodeImageService imageService, QRCodeMapper qrCodeMapper,
                 AsyncEmailService asyncEmailService, CaretakerService caretakerService,
-                AuthenticationProvider authenticationProvider) {
+                AuthenticationProvider authenticationProvider, MobileServiceService mobileServiceService) {
             return new QRCodeServiceFacade(qrCodeService, patientService, utilityService, imageService, qrCodeMapper,
-                    asyncEmailService, caretakerService, authenticationProvider);
+                    asyncEmailService, caretakerService, authenticationProvider, mobileServiceService);
         }
     }
 
@@ -298,6 +308,9 @@ class QRCodeRestIntegrationTest {
     private AuthenticationProvider authenticationProvider;
 
     @Autowired
+    private MobileServiceService mobileService;
+
+    @Autowired
     private QRCodeService qrCodeService;
 
     @Autowired
@@ -311,6 +324,7 @@ class QRCodeRestIntegrationTest {
     private UUID patientId;
     private UUID otherPatientId;
     private UUID blockedPatientId;
+    private UUID notOnboardedPatientId;
     private UUID strangersPatientId;
     private UUID caretakerId;
     private UUID caretakerKeycloakId;
@@ -319,7 +333,9 @@ class QRCodeRestIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        reset(authenticationProvider);
+        reset(authenticationProvider, mobileService);
+        when(mobileService.issueOnboardingLink(any())).thenAnswer(invocation ->
+                "https://mobile.example.org/api/v1/onboarding/" + UUID.randomUUID());
         pushRecorder.pushed.clear();
         GREEN_MAIL.purgeEmailFromAllMailboxes();
         jdbc.update("DELETE FROM t_notification_read");
@@ -335,10 +351,12 @@ class QRCodeRestIntegrationTest {
         strangerKeycloakId = UUID.randomUUID();
         insertCaretaker(caretakerId, caretakerKeycloakId, CARETAKER_FIRST_NAME, CARETAKER_LAST_NAME, CARETAKER_EMAIL);
         insertCaretaker(strangerId, strangerKeycloakId, "Other", "Caretaker", "other.caretaker@example.org");
-        patientId = insertPatient(PATIENT_FIRST_NAME, PATIENT_LAST_NAME, PATIENT_EMAIL, "en", "P1");
-        otherPatientId = insertPatient("Tobias", "Fernhollow", OTHER_PATIENT_EMAIL, "sl", "P2");
-        blockedPatientId = insertPatient("Ines", "Thistledown", BLOCKED_PATIENT_EMAIL, "sl", "P3");
-        strangersPatientId = insertPatient("Other", "Patient", "other.patient@example.com", "sl", "P4");
+        patientId = insertPatient(PATIENT_FIRST_NAME, PATIENT_LAST_NAME, PATIENT_EMAIL, "en", "P1", UUID.randomUUID());
+        otherPatientId = insertPatient("Tobias", "Fernhollow", OTHER_PATIENT_EMAIL, "sl", "P2", UUID.randomUUID());
+        blockedPatientId = insertPatient("Ines", "Thistledown", BLOCKED_PATIENT_EMAIL, "sl", "P3", UUID.randomUUID());
+        strangersPatientId = insertPatient("Other", "Patient", "other.patient@example.com", "sl", "P4", UUID.randomUUID());
+        notOnboardedPatientId = insertPatient("Nora", "Mossgrove", "nora.mossgrove@example.com", "sl", "P5", null);
+        assign(notOnboardedPatientId, caretakerId);
         assign(patientId, caretakerId);
         assign(otherPatientId, caretakerId);
         assign(blockedPatientId, caretakerId);
@@ -357,11 +375,13 @@ class QRCodeRestIntegrationTest {
                 + "VALUES (?, ?, ?, ?, ?, 'sl')", id, keycloakId, firstName, lastName, email);
     }
 
-    private UUID insertPatient(String firstName, String lastName, String email, String language, String insuranceId) {
+    private UUID insertPatient(String firstName, String lastName, String email, String language, String insuranceId,
+            UUID keycloakId) {
         final UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO t_patient (id, first_name, last_name, date_of_birth, gender, health_insurance_id, "
-                + "street, city, state, country, email, phone_number, language) VALUES (?, ?, ?, DATE '1990-01-01', "
-                + "'OTHER', ?, 's', 'c', 'st', 'co', ?, '1', ?)", id, firstName, lastName, insuranceId, email, language);
+                + "street, city, state, country, email, phone_number, language, keycloak_id) VALUES (?, ?, ?, "
+                + "DATE '1990-01-01', 'OTHER', ?, 's', 'c', 'st', 'co', ?, '1', ?, ?)",
+                id, firstName, lastName, insuranceId, email, language, keycloakId);
         return id;
     }
 
@@ -438,47 +458,71 @@ class QRCodeRestIntegrationTest {
         assertThat(stored.get("id_patient")).isEqualTo(patientId);
         // On behalf of the authenticated caretaker, whatever the request names.
         assertThat(stored.get("id_caretaker")).isEqualTo(caretakerId);
-        assertThat(stored.get("onboarding_url")).isEqualTo(url);
+        // The link is the one the mobile service issued for the patient's mobile user, not the request's.
+        final String link = (String) stored.get("onboarding_url");
+        assertThat(link).startsWith("https://mobile.example.org/api/v1/onboarding/").isNotEqualTo(url);
+        verify(mobileService).issueOnboardingLink(patientKeycloakId(patientId));
         assertThat(stored.get("created_at")).isNotNull();
+        // Valid as long as the links of the mobile service (onboarding.code.validity, here 10 days).
         assertThat(((java.sql.Timestamp) stored.get("expires_at")).toInstant())
-                .isBetween(OffsetDateTime.now().plusDays(30).minusMinutes(1).toInstant(),
-                        OffsetDateTime.now().plusDays(30).plusMinutes(1).toInstant());
+                .isBetween(OffsetDateTime.now().plusDays(10).minusMinutes(1).toInstant(),
+                        OffsetDateTime.now().plusDays(10).plusMinutes(1).toInstant());
         // The token: a random UUID and the creation time.
         assertThat(token).matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}-\\d{13}");
-        // The image holds the onboarding URL and the token, and nothing about the patient.
+        // The image holds the issued onboarding link and the token, and nothing about the patient.
         final String image = (String) stored.get("image_url");
         assertThat(image).startsWith(DATA_URI_PREFIX);
         assertThat(decode(Base64.getDecoder().decode(image.substring(DATA_URI_PREFIX.length()))))
-                .isEqualTo(url + "?token=" + token);
+                .isEqualTo(link + "?token=" + token);
+    }
+
+    private UUID patientKeycloakId(UUID patient) {
+        return jdbc.queryForObject("SELECT keycloak_id FROM t_patient WHERE id = ?", UUID.class, patient);
     }
 
     @Test
-    void aSecondCodeIsRefusedWhileTheFirstIsActiveAndUnexpired() throws Exception {
+    void aSecondCodeRevokesTheFirstActiveOne_andIssuesANewLink() throws Exception {
+        final UUID first = createdQrCode(patientId);
+        final String firstLink = (String) row(first).get("onboarding_url");
+
+        final UUID second = createdQrCode(patientId);
+
+        assertThat(qrCodeCount()).isEqualTo(2);
+        assertThat(row(first).get("status")).hasToString("REVOKED");
+        assertThat(row(second).get("status")).hasToString("ACTIVE");
+        assertThat(row(second).get("onboarding_url")).isNotEqualTo(firstLink);
+        org.mockito.Mockito.verify(mobileService, org.mockito.Mockito.times(2)).issueOnboardingLink(patientKeycloakId(patientId));
+        mvc.perform(get("/api/v1/qrcodes/patient/" + patientId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payload.id").value(second.toString()));
+    }
+
+    @Test
+    void aNewCodeLeavesUsedExpiredAndOtherPatientsCodesAlone() throws Exception {
+        final UUID used = createdQrCode(patientId);
+        qrCodeService.configure(new ConfigureQRCodeCommand(used, true));
+        final UUID others = createdQrCode(otherPatientId);
+
         createdQrCode(patientId);
 
-        create(patientId, onboardingUrl(patientId))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("QR_CODE_FOUND"));
-
-        assertThat(qrCodeCount()).isEqualTo(1);
+        assertThat(row(used).get("status")).hasToString("USED");
+        assertThat(row(others).get("status")).hasToString("ACTIVE");
     }
 
     @Test
-    void aNewCodeIsCreatedOnceTheEarlierOneHasExpired_andThePatientsLatestIsReturned() throws Exception {
+    void anExpiredActiveCodeIsRevokedByTheNewOne_andThePatientsLatestIsReturned() throws Exception {
         final UUID first = createdQrCode(patientId);
         expire(first);
 
         final UUID second = createdQrCode(patientId);
 
         assertThat(qrCodeCount()).isEqualTo(2);
+        assertThat(row(first).get("status")).hasToString("REVOKED");
         // More than one row of the patient is no error: the most recent one is the patient's code.
         mvc.perform(get("/api/v1/qrcodes/patient/" + patientId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.payload.id").value(second.toString()))
                 .andExpect(jsonPath("$.payload.status").value("ACTIVE"));
-        // The patient's QR code is the one that was not refused; creating again is refused again.
-        create(patientId, onboardingUrl(patientId)).andExpect(status().isNotFound());
-        assertThat(qrCodeCount()).isEqualTo(2);
     }
 
     @Test
@@ -495,36 +539,66 @@ class QRCodeRestIntegrationTest {
     }
 
     @Test
-    void createRequiresAPatientAndAnOnboardingUrl() throws Exception {
+    void createRequiresAPatientWithAMobileUser() throws Exception {
         create(null, onboardingUrl(patientId))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PATIENT_ID_NOT_PROVIDED"));
-        create(patientId, "")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("QR_CODE_ONBOARDING_URL_BLANK"));
-        create(patientId, null)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("QR_CODE_ONBOARDING_URL_NULL"));
         create(UUID.randomUUID(), onboardingUrl(patientId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PATIENT_NOT_FOUND"));
+        create(notOnboardedPatientId, onboardingUrl(notOnboardedPatientId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PATIENT_NOT_ONBOARDED"));
 
         assertThat(qrCodeCount()).isZero();
+        org.mockito.Mockito.verifyNoInteractions(mobileService);
     }
 
-    /**
-     * Current behaviour, for the record: the onboarding URL is the caller's, and it is encoded as it is. It is not
-     * checked against the instance's own onboarding address.
-     */
     @Test
-    void theOnboardingUrlOfTheRequestIsEncodedAsItIs() throws Exception {
-        final String response = create(patientId, "https://other.example.net/anywhere")
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        final UUID id = UUID.fromString(JSON.readTree(response).get("payload").get("id").asText());
+    void theOnboardingUrlOfTheRequestIsIgnored() throws Exception {
+        for (final String ignored : new String[] {"", null, "javascript:alert(1)", "https://other.example.net/anywhere"}) {
+            final String response = create(patientId, ignored)
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+            final UUID id = UUID.fromString(JSON.readTree(response).get("payload").get("id").asText());
 
-        final String image = (String) row(id).get("image_url");
-        assertThat(decode(Base64.getDecoder().decode(image.substring(DATA_URI_PREFIX.length()))))
-                .startsWith("https://other.example.net/anywhere?token=");
+            final String image = (String) row(id).get("image_url");
+            assertThat(decode(Base64.getDecoder().decode(image.substring(DATA_URI_PREFIX.length()))))
+                    .startsWith("https://mobile.example.org/api/v1/onboarding/");
+        }
+    }
+
+    @Test
+    void aFailureOfTheMobileServiceCreatesNothingAndRevokesNothing() throws Exception {
+        final UUID first = createdQrCode(patientId);
+        org.mockito.Mockito.doThrow(new si.result.spring.boot.bricks.exception.DomainException(
+                        si.result.project.eearly.exception.DomainExceptionCode.MOBILE_SERVICE_REQUEST_FAILED))
+                .when(mobileService).issueOnboardingLink(any());
+
+        create(patientId, null).andExpect(status().is5xxServerError())
+                .andExpect(jsonPath("$.code").value("MOBILE_SERVICE_REQUEST_FAILED"));
+        org.mockito.Mockito.doThrow(new si.result.spring.boot.bricks.exception.DomainException(
+                        si.result.project.eearly.exception.DomainExceptionCode.MOBILE_USER_NOT_FOUND))
+                .when(mobileService).issueOnboardingLink(any());
+        create(patientId, null).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MOBILE_USER_NOT_FOUND"));
+
+        assertThat(qrCodeCount()).isEqualTo(1);
+        assertThat(row(first).get("status")).hasToString("ACTIVE");
+    }
+
+    @Test
+    void anUnacceptableIssuedLinkCreatesNothingAndRevokesNothing() throws Exception {
+        final UUID first = createdQrCode(patientId);
+        for (final String link : new String[] {"http://mobile.example.org/o/x", "/relative/path",
+                "https://mobile.example.org/" + "a".repeat(520)}) {
+            when(mobileService.issueOnboardingLink(any())).thenReturn(link);
+
+            create(patientId, null).andExpect(status().is5xxServerError())
+                    .andExpect(jsonPath("$.code").value("QR_CODE_ONBOARDING_URL_INVALID"));
+        }
+
+        assertThat(qrCodeCount()).isEqualTo(1);
+        assertThat(row(first).get("status")).hasToString("ACTIVE");
     }
 
     // ---- reading and listing ----------------------------------------------------------------
@@ -712,6 +786,25 @@ class QRCodeRestIntegrationTest {
     }
 
     @Test
+    void aRevokedUsedOrExpiredCodeIsNotSent() throws Exception {
+        final UUID revoked = createdQrCode(patientId);
+        final UUID current = createdQrCode(patientId);
+        final UUID used = createdQrCode(otherPatientId);
+        qrCodeService.configure(new ConfigureQRCodeCommand(used, true));
+        final UUID expired = createdQrCode(blockedPatientId);
+        expire(expired);
+
+        for (final UUID id : new UUID[] {revoked, used, expired}) {
+            sendEmail(id, null).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("QR_CODE_NOT_ACTIVE"));
+        }
+        assertThat(GREEN_MAIL.getReceivedMessages()).isEmpty();
+
+        sendEmail(current, null).andExpect(status().isOk());
+        assertThat(GREEN_MAIL.getReceivedMessages()).hasSize(1);
+    }
+
+    @Test
     void sendEmailNeedsAnExistingQrCode() throws Exception {
         sendEmail(null, null).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("QR_CODE_NOT_FOUND"));
         sendEmail(UUID.randomUUID(), null).andExpect(status().isNotFound())
@@ -781,7 +874,13 @@ class QRCodeRestIntegrationTest {
         mvc.perform(get("/api/v1/qrcodes/patient/" + patientId)).andExpect(status().isOk());
         sendEmail(id, "Care App").andExpect(status().isOk());
         sendEmail(createdQrCodeAs(strangerKeycloakId, strangersPatientId), null).andExpect(status().isNotFound());
-        create(patientId, url).andExpect(status().isNotFound());
+        final String secondResponse = create(patientId, url).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        final String secondToken = JSON.readTree(secondResponse).get("payload").get("token").asText();
+        final String issuedLink = (String) row(UUID.fromString(
+                JSON.readTree(secondResponse).get("payload").get("id").asText())).get("onboarding_url");
+        final String firstLink = (String) row(id).get("onboarding_url");
+        create(notOnboardedPatientId, url).andExpect(status().isBadRequest());
         qrCodeService.configure(new ConfigureQRCodeCommand(id, true));
         assertThatThrownByUnknownToken(token);
 
@@ -794,6 +893,9 @@ class QRCodeRestIntegrationTest {
         assertThat(log).doesNotContain(PATIENT_FIRST_NAME).doesNotContain(PATIENT_LAST_NAME)
                 .doesNotContain(CARETAKER_FIRST_NAME).doesNotContain(CARETAKER_LAST_NAME);
         assertThat(log).doesNotContain(url);
+        // The issued links are credentials too, and so is the second code's token.
+        assertThat(log).doesNotContain(issuedLink).doesNotContain(firstLink).doesNotContain(secondToken);
+        assertThat(log).doesNotContain(issuedLink.substring(issuedLink.lastIndexOf('/') + 1));
     }
 
     private void assertThatThrownByUnknownToken(String token) {

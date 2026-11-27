@@ -148,4 +148,14 @@ class QRCodeTest {
                 .anyMatch(f -> f.getType() == QRCode.class || f.getGenericType().getTypeName().contains(QRCode.class.getName())),
                 "Caretaker has a QRCode field");
     }
+
+    @Test
+    @DisplayName("Revoking an active QR code sets its status to REVOKED")
+    void revoke_SetsRevoked() {
+        final QRCode qrCode = created();
+
+        qrCode.revoke();
+
+        assertEquals(QRCodeStatus.REVOKED, qrCode.getStatus());
+    }
 }

@@ -17,6 +17,7 @@ import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.model.patient.Patient_;
 import si.result.project.eearly.model.qrcode.QRCode;
 import si.result.project.eearly.model.qrcode.QRCode_;
+import si.result.project.eearly.model.qrcode.QRCodeStatus;
 import si.result.project.eearly.model.qrcode.command.ConfigureQRCodeCommand;
 import si.result.project.eearly.model.qrcode.command.CreateQRCodeCommand;
 import si.result.project.eearly.model.qrcode.command.UpdateQRCodeCommand;
@@ -80,8 +81,19 @@ public class QRCodeService {
         };
     }
 
+    /**
+     * Creates a QR code and revokes the patient's earlier {@code ACTIVE} codes: the new code's onboarding link has
+     * replaced theirs, so they no longer work.
+     */
+    @Transactional
     public QRCode create(CreateQRCodeCommand command) {
         log.info("Creating QR code for patient: {}", command.patient().getId());
+        for (final QRCode previous : qrCodeRepository.findByPatientIdAndStatus(
+                command.patient().getId(), QRCodeStatus.ACTIVE)) {
+            previous.revoke();
+            qrCodeRepository.save(previous);
+            log.info("Revoked QR code: {}", previous.getId());
+        }
         QRCode qrCode = QRCode.create(command);
         log.debug("QR code created with ID: {}", qrCode.getId());
         return qrCodeRepository.save(qrCode);

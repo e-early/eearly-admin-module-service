@@ -25,7 +25,7 @@ There is **no bundled mobile app**. You use `curl` and `grpcurl` like a patient 
     |                              |                            |------------------------->|
     |  onboardingUrl               |                            |                          |
     |<-----------------------------|                            |                          |
-    |  GET .../configuration       |                            |                          |
+    |  GET <link>/configuration    |                            |                          |
     |----------------------------------------------------------->|  patient JWT             |
     |  gRPC CreateMeasurement (HR) |                            |                          |
     |----------------------------------------------------------->|  write composition       |
@@ -237,32 +237,30 @@ Save IDs from the response:
 
 ```bash
 export PATIENT_ID=$(jq -r '.payload.id' /tmp/patient.json)
-export USER_ID=$(jq -r '.payload.onboardingUrl' /tmp/patient.json \
-  | sed -E 's|.*/onboarding/||; s|/configuration$||')
+export ONBOARDING_URL=$(jq -r '.payload.onboardingUrl' /tmp/patient.json)
 echo "PATIENT_ID=$PATIENT_ID"
-echo "USER_ID=$USER_ID"
 ```
 
-> **Important:** `onboardingUrl` ends with `/configuration`. Extract the UUID **between** `/onboarding/` and `/configuration`.  
-> Do **not** use `sed 's|.*/||'` — that leaves the literal string `configuration` as `USER_ID`.
-
-Example `onboardingUrl`:
-
-`http://localhost:8081/api/v1/onboarding/8e5ad47e-77c0-4e4f-99ad-666eef8f766b/configuration`
+`onboardingUrl` is `http://localhost:8081/api/v1/onboarding/<code>`: a random, single-use code, not the user id.
+Treat it like a password. The Keycloak user id (`USER_ID`) comes from the configuration response in Phase 5.
 
 ---
 
 ## Phase 5 — Patient JWT (mobile REST)
 
-```bash
-curl -s "http://localhost:8081/api/v1/onboarding/${USER_ID}/configuration" | jq .
+The onboarding link can be redeemed **once**. Save the response:
 
-export ACCESS_TOKEN=$(curl -s \
-  "http://localhost:8081/api/v1/onboarding/${USER_ID}/configuration" \
-  | jq -r '.accessToken')
+```bash
+curl -s "${ONBOARDING_URL%/}/configuration" > /tmp/onboarding.json
+jq 'del(.accessToken, .refreshToken)' /tmp/onboarding.json
+
+export ACCESS_TOKEN=$(jq -r '.accessToken' /tmp/onboarding.json)
+export USER_ID=$(jq -r '.userId' /tmp/onboarding.json)
+echo "USER_ID=$USER_ID"
 ```
 
-If `jq` fails, print the raw response — wrong `USER_ID` or mobile not running on `8081`.
+A second call with the same link returns `404`. For a new link, create a QR code for the patient
+(`POST /api/v1/qrcodes`), which issues a fresh link and revokes the previous one.
 
 ---
 
@@ -449,7 +447,7 @@ grpcurl -plaintext \
 
 | Symptom | Likely cause | Action |
 |---------|----------------|--------|
-| `jq: parse error` on onboarding | Wrong `USER_ID` (`configuration`) | Fix `USER_ID` extraction (Phase 4) |
+| `404` on onboarding configuration | Link already used, expired or replaced | Create a new QR code for the patient and use its link (Phase 5) |
 | `MEASUREMENT_NOT_FOUND` on patient create | Invalid catalog id in `measurementList` | Use seed catalog UUIDs |
 | Only HR in EHR, no SpO₂ | HR + SpO₂ in same `measurementBatchId` | Two gRPC calls (Phase 6) |
 | SpO₂ biometrics `0.0` | Old mobile / AQL reads `magnitude` only | Use current mobile OSS + rebuild |

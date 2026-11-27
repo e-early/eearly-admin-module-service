@@ -123,6 +123,9 @@ class QRCodeEndpointSecurityTest {
     @MockitoBean
     private CaretakerService caretakerService;
 
+    @MockitoBean
+    private si.result.project.eearly.port.mobile.MobileServiceService mobileServiceService;
+
     private QRCode qrCode;
 
     @BeforeEach
@@ -151,6 +154,9 @@ class QRCodeEndpointSecurityTest {
 
         final Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(PATIENT_ID);
+        when(patient.getKeycloakId()).thenReturn(UUID.fromString("c3a1f0d2-6b7e-4f3a-9d58-2e4b8a1c7f90"));
+        when(mobileServiceService.issueOnboardingLink(any()))
+                .thenReturn("https://mobile.example.org/onboarding/single-use-code");
         when(patientService.findByIdForCaretaker(any(UUID.class), any(UUID.class))).thenAnswer(invocation -> {
             if (PATIENT_ID.equals(invocation.getArgument(0)) && CARETAKER_ID.equals(invocation.getArgument(1))) {
                 return patient;
@@ -160,6 +166,8 @@ class QRCodeEndpointSecurityTest {
         qrCode = mock(QRCode.class);
         when(qrCode.getPatient()).thenReturn(patient);
         when(qrCode.getCaretaker()).thenReturn(caretaker);
+        when(qrCode.getStatus()).thenReturn(QRCodeStatus.ACTIVE);
+        when(qrCode.getExpiresAt()).thenReturn(OffsetDateTime.now().plusDays(1));
         when(qrCodeService.findById(any(UUID.class))).thenAnswer(invocation -> {
             if (QR_CODE_ID.equals(invocation.getArgument(0))) {
                 return qrCode;
@@ -251,6 +259,7 @@ class QRCodeEndpointSecurityTest {
         sendEmail("caretaker-token").andExpect(status().isOk());
 
         verify(qrCodeService).findAllForCaretaker(any(), any(), eq(CARETAKER_ID));
+        verify(mobileServiceService).issueOnboardingLink(any());
         verify(asyncEmailService).sendQRCodeEmailAsync(any());
     }
 
@@ -295,7 +304,8 @@ class QRCodeEndpointSecurityTest {
 
         verify(qrCodeService, never()).create(any());
         verify(qrCodeService, never()).findAllForCaretaker(any(), any(), any());
-        verifyNoInteractions(asyncEmailService, qrCodeMapper, qrCodeImageService, qrCodeUtilityService);
+        verifyNoInteractions(asyncEmailService, qrCodeMapper, qrCodeImageService, qrCodeUtilityService,
+                mobileServiceService);
     }
 
     @Test
@@ -308,6 +318,7 @@ class QRCodeEndpointSecurityTest {
                 .andExpect(status().isNotFound());
 
         verify(qrCodeService, never()).create(any());
+        verifyNoInteractions(mobileServiceService);
         verify(patientService, times(1)).findByIdForCaretaker(PATIENT_ID, OTHER_CARETAKER_ID);
     }
 }
