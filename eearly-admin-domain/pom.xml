@@ -51,6 +51,12 @@
       <version>1.5.9</version>
     </dependency>
 
+    <!-- QR code image generation (Apache License 2.0) -->
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+    </dependency>
+
 
     <!-- Test -->
     <dependency>

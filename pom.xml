@@ -101,6 +101,12 @@
         <artifactId>eearly-admin-grpc-adapter</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <!-- QR code image generation (ZXing core, Apache License 2.0) -->
+      <dependency>
+        <groupId>com.google.zxing</groupId>
+        <artifactId>core</artifactId>
+        <version>3.5.3</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <build>

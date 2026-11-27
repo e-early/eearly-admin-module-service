@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.model.patient.PatientLanguage;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
@@ -35,6 +36,25 @@ public class PatientService {
 
     public Page<Patient> findAll(final Specification<Patient> specification, final Pageable pageable) {
         return patientRepository.findAll(specification, pageable);
+    }
+
+    /**
+     * The patient, if they are assigned to the caretaker; otherwise {@code PATIENT_NOT_FOUND}, as for a patient that
+     * does not exist, so that the answer does not tell whether another caretaker's patient exists.
+     */
+    @Transactional(readOnly = true)
+    public Patient findByIdForCaretaker(final UUID id, final UUID caretakerId) {
+        final Patient patient = findById(id);
+        if (!isAssignedToCaretaker(patient, caretakerId)) {
+            log.error("Patient with ID {} is not assigned to caretaker {}", id, caretakerId);
+            throw new DomainException(DomainExceptionCode.PATIENT_NOT_FOUND);
+        }
+        return patient;
+    }
+
+    private boolean isAssignedToCaretaker(final Patient patient, final UUID caretakerId) {
+        final List<Caretaker> caretakers = patient.getCaretakers();
+        return caretakers != null && caretakers.stream().anyMatch(caretaker -> caretakerId.equals(caretaker.getId()));
     }
 
     public List<Patient> findAllById(final List<UUID> ids) {
