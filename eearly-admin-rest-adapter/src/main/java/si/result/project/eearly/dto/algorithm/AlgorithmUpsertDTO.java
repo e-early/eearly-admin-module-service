@@ -80,6 +80,9 @@ public record AlgorithmUpsertDTO(
     List<UUID> patientList,
 
     @Schema
-    List<UUID> measurementList
+    List<UUID> measurementList,
+
+    @Schema
+    List<UUID> healthConditionList
 ) {
 }

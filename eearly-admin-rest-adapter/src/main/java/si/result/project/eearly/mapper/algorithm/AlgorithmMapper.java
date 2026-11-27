@@ -15,6 +15,7 @@ import si.result.project.eearly.model.algorithm.AlgorithmPricingModelType;
 import si.result.project.eearly.model.algorithm.AlgorithmStatusType;
 import si.result.project.eearly.model.algorithm.command.CreateAlgorithmCommand;
 import si.result.project.eearly.model.algorithm.command.UpdateAlgorithmCommand;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.spring.boot.bricks.exception.DomainException;
@@ -34,10 +35,12 @@ public interface AlgorithmMapper {
     AlgorithmStatusDTO toStatusDTO(final Algorithm algorithm);
 
     CreateAlgorithmCommand toCreateCommand(final AlgorithmUpsertDTO dto,
-                                           final List<Patient> patients, final List<Measurement> measurements);
+                                           final List<Patient> patients, final List<Measurement> measurements,
+                                           final List<HealthCondition> healthConditions);
 
     UpdateAlgorithmCommand toUpdateCommand(final AlgorithmUpsertDTO dto,
-                                           final List<Patient> patients, final List<Measurement> measurements);
+                                           final List<Patient> patients, final List<Measurement> measurements,
+                                           final List<HealthCondition> healthConditions);
 
     default void validateJson(String json, DomainExceptionCode code) {
         if (json == null) return;

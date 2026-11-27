@@ -12,6 +12,7 @@ import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.algorithm.command.CreateAlgorithmCommand;
 import si.result.project.eearly.model.algorithm.command.UpdateAlgorithmCommand;
 import si.result.project.eearly.model.auditable.Auditable;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.spring.boot.bricks.exception.DomainException;
@@ -121,6 +122,14 @@ public class Algorithm extends Auditable {
     )
     private List<Measurement> measurements;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "t_health_condition_algorithm",
+            joinColumns = @JoinColumn(name = "algorithm_id"),
+            inverseJoinColumns = @JoinColumn(name = "condition_id")
+    )
+    private List<HealthCondition> healthConditions;
+
     public static Algorithm create(CreateAlgorithmCommand command) {
         return Algorithm.builder()
                 .name(command.name())
@@ -148,6 +157,7 @@ public class Algorithm extends Auditable {
 
                 .patients(command.patients())
                 .measurements(command.measurements())
+                .healthConditions(command.healthConditions())
                 .build();
     }
 
@@ -176,6 +186,7 @@ public class Algorithm extends Auditable {
 
         setPatients(command.patients());
         setMeasurements(command.measurements());
+        setHealthConditions(command.healthConditions());
     }
 
     public String getExecutionUrl() {

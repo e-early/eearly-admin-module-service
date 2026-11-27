@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,5 +33,6 @@ public class CreatePatientCommand {
 
     private final List<Caretaker> caretakers;
     private final List<Measurement> measurements;
+    private final List<HealthCondition> healthConditions;
     private final List<Algorithm> algorithms;
 }

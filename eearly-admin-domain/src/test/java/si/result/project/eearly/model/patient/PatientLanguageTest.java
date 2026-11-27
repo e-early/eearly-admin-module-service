@@ -19,7 +19,7 @@ class PatientLanguageTest {
                 "Ana", "Novak", LocalDate.of(1990, 1, 1), GenderType.FEMALE,
                 "123456789", "Street", "City", "State", 1000,
                 "Country", "ana@example.com", "+38640000000", language,
-                null, null, null);
+                null, null, null, null);
     }
 
     private static UpdatePatientCommand update(String language) {
@@ -27,7 +27,7 @@ class PatientLanguageTest {
                 UUID.randomUUID(), "Ana", "Novak", LocalDate.of(1990, 1, 1), GenderType.FEMALE,
                 "123456789", "Street", "City", "State", 1000,
                 "Country", "ana@example.com", "+38640000000", language,
-                null, null, null);
+                null, null, null, null);
     }
 
     @Test

@@ -41,7 +41,7 @@ class PatientDemographicsSyncTest {
                 "Test", "1", dateOfBirth, gender,
                 "123456789", "Street", "City", "State", 1000,
                 "Country", "test@example.com", "+38640000000", null,
-                null, null, null));
+                null, null, null, null));
         patient.setKeycloakId(keycloakId);
         return patient;
     }

@@ -13,9 +13,11 @@ import si.result.project.eearly.dto.algorithm.AlgorithmUpsertDTO;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.mapper.algorithm.AlgorithmMapper;
 import si.result.project.eearly.model.algorithm.Algorithm;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.healthcondition.HealthConditionService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.spring.boot.bricks.exception.DomainException;
@@ -36,6 +38,8 @@ class AlgorithmServiceFacadeTest {
     @Mock
     private MeasurementService measurementService;
     @Mock
+    private HealthConditionService healthConditionService;
+    @Mock
     private AlgorithmMapper algorithmMapper;
 
     @InjectMocks
@@ -46,6 +50,7 @@ class AlgorithmServiceFacadeTest {
     private Algorithm algorithm;
     private List<Patient> patients;
     private List<Measurement> measurements;
+    private List<HealthCondition> healthConditions;
 
     @BeforeEach
     void setUp() {
@@ -54,6 +59,7 @@ class AlgorithmServiceFacadeTest {
         algorithm = mock(Algorithm.class);
         patients = List.of(mock(Patient.class));
         measurements = List.of(mock(Measurement.class));
+        healthConditions = List.of(mock(HealthCondition.class));
     }
 
     @Nested
@@ -65,9 +71,11 @@ class AlgorithmServiceFacadeTest {
         void create_ShouldReturnUpsertDTO() {
             when(upsertDTO.patientList()).thenReturn(List.of(UUID.randomUUID()));
             when(upsertDTO.measurementList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.healthConditionList()).thenReturn(List.of(UUID.randomUUID()));
 
             when(patientService.findAllById(anyList())).thenReturn(patients);
             when(measurementService.findAllById(anyList())).thenReturn(measurements);
+            when(healthConditionService.findAllById(anyList())).thenReturn(healthConditions);
             when(algorithmService.create(any())).thenReturn(algorithm);
             when(algorithmMapper.toDTO(algorithm)).thenReturn(mock(AlgorithmDTO.class));
 
@@ -76,7 +84,8 @@ class AlgorithmServiceFacadeTest {
             assertNotNull(result);
             verify(patientService).findAllById(anyList());
             verify(measurementService).findAllById(anyList());
-            verify(algorithmMapper).toCreateCommand(eq(upsertDTO), eq(patients), eq(measurements));
+            verify(healthConditionService).findAllById(anyList());
+            verify(algorithmMapper).toCreateCommand(eq(upsertDTO), eq(patients), eq(measurements), eq(healthConditions));
             verify(algorithmService).create(any());
             verify(algorithmMapper).toDTO(algorithm);
         }
@@ -105,6 +114,22 @@ class AlgorithmServiceFacadeTest {
 
             verify(patientService).findAllById(anyList());
             verify(measurementService).findAllById(anyList());
+            verifyNoMoreInteractions(healthConditionService);
+        }
+
+        @Test
+        @DisplayName("Should throw DomainException when health condition not found")
+        void create_WhenHealthConditionNotFound_ShouldThrow() {
+            when(upsertDTO.patientList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.measurementList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.healthConditionList()).thenReturn(List.of(UUID.randomUUID()));
+
+            when(patientService.findAllById(anyList())).thenReturn(patients);
+            when(measurementService.findAllById(anyList())).thenReturn(measurements);
+            when(healthConditionService.findAllById(anyList())).thenReturn(List.of());
+
+            DomainException ex = assertThrows(DomainException.class, () -> algorithmServiceFacade.create(upsertDTO));
+            assertEquals(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND, ex.getCode());
         }
     }
 
@@ -118,11 +143,13 @@ class AlgorithmServiceFacadeTest {
 
             when(upsertDTO.patientList()).thenReturn(List.of(UUID.randomUUID()));
             when(upsertDTO.measurementList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.healthConditionList()).thenReturn(List.of(UUID.randomUUID()));
 
             when(patientService.findAllById(anyList())).thenReturn(patients);
             when(measurementService.findAllById(anyList())).thenReturn(measurements);
+            when(healthConditionService.findAllById(anyList())).thenReturn(healthConditions);
 
-            when(algorithmMapper.toUpdateCommand(eq(upsertDTO), eq(patients), eq(measurements)))
+            when(algorithmMapper.toUpdateCommand(eq(upsertDTO), eq(patients), eq(measurements), eq(healthConditions)))
                     .thenReturn(mock(si.result.project.eearly.model.algorithm.command.UpdateAlgorithmCommand.class));
             when(algorithmService.update(any())).thenReturn(algorithm);
             when(algorithmMapper.toUpsertDTO(algorithm)).thenReturn(upsertDTO);
@@ -132,7 +159,8 @@ class AlgorithmServiceFacadeTest {
             assertNotNull(result);
             verify(patientService).findAllById(anyList());
             verify(measurementService).findAllById(anyList());
-            verify(algorithmMapper).toUpdateCommand(eq(upsertDTO), eq(patients), eq(measurements));
+            verify(healthConditionService).findAllById(anyList());
+            verify(algorithmMapper).toUpdateCommand(eq(upsertDTO), eq(patients), eq(measurements), eq(healthConditions));
             verify(algorithmService).update(any());
             verify(algorithmMapper).toUpsertDTO(algorithm);
         }
@@ -173,6 +201,24 @@ class AlgorithmServiceFacadeTest {
 
             verify(patientService).findAllById(anyList());
             verify(measurementService).findAllById(anyList());
+            verifyNoMoreInteractions(healthConditionService);
+        }
+
+        @Test
+        @DisplayName("Should throw DomainException when health condition not found")
+        void update_WhenHealthConditionNotFound_ShouldThrow() {
+            when(upsertDTO.id()).thenReturn(algorithmId);
+
+            when(upsertDTO.patientList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.measurementList()).thenReturn(List.of(UUID.randomUUID()));
+            when(upsertDTO.healthConditionList()).thenReturn(List.of(UUID.randomUUID()));
+
+            when(patientService.findAllById(anyList())).thenReturn(patients);
+            when(measurementService.findAllById(anyList())).thenReturn(measurements);
+            when(healthConditionService.findAllById(anyList())).thenReturn(List.of());
+
+            DomainException ex = assertThrows(DomainException.class, () -> algorithmServiceFacade.update(upsertDTO));
+            assertEquals(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND, ex.getCode());
         }
     }
 
@@ -209,6 +255,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -218,14 +265,15 @@ class AlgorithmServiceFacadeTest {
 
             when(patientService.findAllById(anyList())).thenReturn(patients);
             when(measurementService.findAllById(anyList())).thenReturn(measurements);
+            when(healthConditionService.findAllById(anyList())).thenReturn(healthConditions);
             when(algorithmService.update(any())).thenReturn(algorithm);
 
             // Call the real mapper for toUpdateCommand
-            var updateCommand = realMapper.toUpdateCommand(upsertDTO, patients, measurements);
+            var updateCommand = realMapper.toUpdateCommand(upsertDTO, patients, measurements, healthConditions);
             assertNotNull(updateCommand);
 
             // Pass it to the service facade
-            when(algorithmMapper.toUpdateCommand(any(), any(), any())).thenReturn(updateCommand);
+            when(algorithmMapper.toUpdateCommand(any(), any(), any(), any())).thenReturn(updateCommand);
             when(algorithmMapper.toUpsertDTO(algorithm)).thenReturn(upsertDTO);
 
             AlgorithmUpsertDTO result = algorithmServiceFacade.update(upsertDTO);
@@ -236,6 +284,7 @@ class AlgorithmServiceFacadeTest {
 
             verify(patientService).findAllById(anyList());
             verify(measurementService).findAllById(anyList());
+            verify(healthConditionService).findAllById(anyList());
             verify(algorithmService).update(any());
         }
 
@@ -265,6 +314,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -272,7 +322,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             // Call real mapper and trigger validation
-            assertThrows(DomainException.class, () -> realMapper.toUpdateCommand(upsertDTO, patients, measurements));
+            assertThrows(DomainException.class, () -> realMapper.toUpdateCommand(upsertDTO, patients, measurements, healthConditions));
         }
 
         @Test
@@ -301,6 +351,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -308,7 +359,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             // Call real mapper and trigger validation
-            assertThrows(DomainException.class, () -> realMapper.toUpdateCommand(upsertDTO, patients, measurements));
+            assertThrows(DomainException.class, () -> realMapper.toUpdateCommand(upsertDTO, patients, measurements, healthConditions));
         }
 
         @Test
@@ -337,6 +388,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -344,7 +396,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             DomainException ex = assertThrows(DomainException.class, () ->
-                    realMapper.toUpdateCommand(invalidCategoryDTO, patients, measurements));
+                    realMapper.toUpdateCommand(invalidCategoryDTO, patients, measurements, healthConditions));
 
             assertEquals(DomainExceptionCode.ALGORITHM_INVALID_CATEGORY, ex.getCode());
         }
@@ -375,6 +427,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -382,7 +435,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             DomainException ex = assertThrows(DomainException.class, () ->
-                    realMapper.toUpdateCommand(invalidStatusDTO, patients, measurements));
+                    realMapper.toUpdateCommand(invalidStatusDTO, patients, measurements, healthConditions));
 
             assertEquals(DomainExceptionCode.ALGORITHM_INVALID_STATUS, ex.getCode());
         }
@@ -413,6 +466,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -420,7 +474,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             DomainException ex = assertThrows(DomainException.class, () ->
-                    realMapper.toUpdateCommand(invalidPricingDTO, patients, measurements));
+                    realMapper.toUpdateCommand(invalidPricingDTO, patients, measurements, healthConditions));
 
             assertEquals(DomainExceptionCode.ALGORITHM_INVALID_PRICING_MODEL, ex.getCode());
         }
@@ -451,6 +505,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -458,7 +513,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             DomainException ex = assertThrows(DomainException.class, () ->
-                    realMapper.toUpdateCommand(invalidCurrencyDTO, patients, measurements));
+                    realMapper.toUpdateCommand(invalidCurrencyDTO, patients, measurements, healthConditions));
 
             assertEquals(DomainExceptionCode.ALGORITHM_INVALID_CURRENCY, ex.getCode());
         }
@@ -489,6 +544,7 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
@@ -496,7 +552,7 @@ class AlgorithmServiceFacadeTest {
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
             DomainException ex = assertThrows(DomainException.class, () ->
-                    realMapper.toUpdateCommand(dto, patients, measurements));
+                    realMapper.toUpdateCommand(dto, patients, measurements, healthConditions));
 
             assertEquals(DomainExceptionCode.ALGORITHM_INVALID_COST, ex.getCode());
         }
@@ -527,13 +583,14 @@ class AlgorithmServiceFacadeTest {
                     "BILL-001",
                     "Commercial",
                     List.of(UUID.randomUUID()),
+                    List.of(UUID.randomUUID()),
                     List.of(UUID.randomUUID())
             );
 
             List<Patient> patients = List.of(mock(Patient.class));
             List<Measurement> measurements = List.of(mock(Measurement.class));
 
-            var command = realMapper.toUpdateCommand(upsertDTO, patients, measurements);
+            var command = realMapper.toUpdateCommand(upsertDTO, patients, measurements, healthConditions);
 
             assertEquals("{\"workers\": 2}", command.runnerConfig());
         }

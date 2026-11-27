@@ -10,6 +10,7 @@ import si.result.project.eearly.dto.patient.PatientOnboardingDTO;
 import si.result.project.eearly.dto.patient.PatientUpsertDTO;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.measurement.MeasurementStatus;
 import si.result.project.eearly.model.mobile.CreateMobileUserCommand;
@@ -39,12 +40,14 @@ public interface PatientMapper {
   PatientMeasurementRowDTO toMeasurementRowDTO(final PatientMeasurementRow measurement);
 
   CreatePatientCommand toCreateCommand(final PatientUpsertDTO dto, final List<Caretaker> caretakers,
-      final List<Measurement> measurements, final List<Algorithm> algorithms);
+      final List<Measurement> measurements, final List<HealthCondition> healthConditions,
+      final List<Algorithm> algorithms);
 
   @Mapping(target = "id", source = "id")
   UpdatePatientCommand toUpdateCommand(final UUID id, final PatientUpsertDTO dto,
       final List<Caretaker> caretakers,
-      final List<Measurement> measurements, final List<Algorithm> algorithms);
+      final List<Measurement> measurements, final List<HealthCondition> healthConditions,
+      final List<Algorithm> algorithms);
 
   CreateMobileUserCommand toCreateCommand(final Patient patient);
 

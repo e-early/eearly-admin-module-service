@@ -20,6 +20,7 @@ import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.mapper.patient.PatientMapper;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.measurement.MeasurementStatus;
 import si.result.project.eearly.model.mobile.MobileUserResponse;
@@ -28,6 +29,7 @@ import si.result.project.eearly.model.patient.PatientStatus;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
 import si.result.project.eearly.port.caretaker.CaretakerService;
+import si.result.project.eearly.port.healthcondition.HealthConditionService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.mobile.MobileKeycloakService;
 import si.result.project.eearly.port.mobile.MobileServiceService;
@@ -56,6 +58,8 @@ class PatientServiceFacadeTest {
     private CaretakerService caretakerService;
     @Mock
     private MeasurementService measurementService;
+    @Mock
+    private HealthConditionService healthConditionService;
     @Mock
     private AlgorithmService algorithmService;
     @Mock
@@ -208,11 +212,13 @@ class PatientServiceFacadeTest {
         void create_WithAllRelations_ShouldCreatePatient() {
             List<UUID> caretakerIds = List.of(UUID.randomUUID());
             List<UUID> measurementIds = List.of(UUID.randomUUID());
+            List<UUID> healthConditionIds = List.of(UUID.randomUUID());
             List<UUID> algorithmIds = List.of(UUID.randomUUID());
             UUID testKeycloakId = UUID.randomUUID();
 
             when(patientUpsertDTO.caretakerList()).thenReturn(caretakerIds);
             when(patientUpsertDTO.measurementList()).thenReturn(measurementIds);
+            when(patientUpsertDTO.healthConditionList()).thenReturn(healthConditionIds);
             when(patientUpsertDTO.algorithmsList()).thenReturn(algorithmIds);
             when(patientUpsertDTO.healthInsuranceId()).thenReturn("123");
 
@@ -233,8 +239,9 @@ class PatientServiceFacadeTest {
             when(patientService.findByHealthInsuranceId("123")).thenReturn(null);
             when(caretakerService.findAllById(caretakerIds)).thenReturn(List.of(mock(Caretaker.class)));
             when(measurementService.findAllById(measurementIds)).thenReturn(List.of(mock(Measurement.class)));
+            when(healthConditionService.findAllById(healthConditionIds)).thenReturn(List.of(mock(HealthCondition.class)));
             when(algorithmService.findAllById(algorithmIds)).thenReturn(List.of(mock(Algorithm.class)));
-            when(patientMapper.toCreateCommand(any(), any(), any(), any())).thenReturn(mock(CreatePatientCommand.class));
+            when(patientMapper.toCreateCommand(any(), any(), any(), any(), any())).thenReturn(mock(CreatePatientCommand.class));
             when(patientService.create(any())).thenReturn(testPatient);
 
             when(testPatient.getId()).thenReturn(testId);
@@ -250,6 +257,7 @@ class PatientServiceFacadeTest {
             verify(patientService).findByHealthInsuranceId("123");
             verify(caretakerService).findAllById(caretakerIds);
             verify(measurementService).findAllById(measurementIds);
+            verify(healthConditionService).findAllById(healthConditionIds);
             verify(algorithmService).findAllById(algorithmIds);
             verify(patientService).create(any());
             verify(patientService).updateKeycloakId(testId, testKeycloakId);
@@ -313,6 +321,22 @@ class PatientServiceFacadeTest {
         }
 
         @Test
+        @DisplayName("Should throw exception when health condition not found")
+        void create_WhenHealthConditionNotFound_ShouldThrowException() {
+            List<UUID> healthConditionIds = List.of(UUID.randomUUID());
+
+            when(patientUpsertDTO.healthConditionList()).thenReturn(healthConditionIds);
+            when(patientUpsertDTO.healthInsuranceId()).thenReturn("123");
+            when(patientService.findByHealthInsuranceId("123")).thenReturn(null);
+            when(healthConditionService.findAllById(healthConditionIds)).thenReturn(List.of());
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientServiceFacade.create(patientUpsertDTO));
+
+            assertEquals(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND, exception.getCode());
+        }
+
+        @Test
         @DisplayName("Should throw exception when algorithm not found")
         void create_WhenAlgorithmNotFound_ShouldThrowException() {
             List<UUID> algorithmIds = List.of(UUID.randomUUID());
@@ -339,16 +363,19 @@ class PatientServiceFacadeTest {
             PatientMinimalDTO minimalDTO = mock(PatientMinimalDTO.class);
             List<UUID> caretakerIds = List.of(UUID.randomUUID());
             List<UUID> measurementIds = List.of(UUID.randomUUID());
+            List<UUID> healthConditionIds = List.of(UUID.randomUUID());
             List<UUID> algorithmIds = List.of(UUID.randomUUID());
 
             when(patientUpsertDTO.caretakerList()).thenReturn(caretakerIds);
             when(patientUpsertDTO.measurementList()).thenReturn(measurementIds);
+            when(patientUpsertDTO.healthConditionList()).thenReturn(healthConditionIds);
             when(patientUpsertDTO.algorithmsList()).thenReturn(algorithmIds);
 
             when(caretakerService.findAllById(caretakerIds)).thenReturn(List.of(mock(Caretaker.class)));
             when(measurementService.findAllById(measurementIds)).thenReturn(List.of(mock(Measurement.class)));
+            when(healthConditionService.findAllById(healthConditionIds)).thenReturn(List.of(mock(HealthCondition.class)));
             when(algorithmService.findAllById(algorithmIds)).thenReturn(List.of(mock(Algorithm.class)));
-            when(patientMapper.toUpdateCommand(any(UUID.class), any(), any(), any(), any())).thenReturn(mock(si.result.project.eearly.model.patient.command.UpdatePatientCommand.class));
+            when(patientMapper.toUpdateCommand(any(UUID.class), any(), any(), any(), any(), any())).thenReturn(mock(si.result.project.eearly.model.patient.command.UpdatePatientCommand.class));
             when(patientService.update(any())).thenReturn(testPatient);
             when(patientMapper.toMinimalDTO(testPatient)).thenReturn(minimalDTO);
 
@@ -358,10 +385,26 @@ class PatientServiceFacadeTest {
             assertEquals(minimalDTO, result);
             verify(caretakerService).findAllById(caretakerIds);
             verify(measurementService).findAllById(measurementIds);
+            verify(healthConditionService).findAllById(healthConditionIds);
             verify(algorithmService).findAllById(algorithmIds);
             verify(patientService).update(any());
             verify(patientDemographicsSync).sync(testPatient);
             verify(patientMapper).toMinimalDTO(testPatient);
+        }
+
+        @Test
+        @DisplayName("Should throw exception when health condition not found")
+        void update_WhenHealthConditionNotFound_ShouldThrowException() {
+            List<UUID> healthConditionIds = List.of(UUID.randomUUID());
+
+            when(patientUpsertDTO.healthConditionList()).thenReturn(healthConditionIds);
+            when(healthConditionService.findAllById(healthConditionIds)).thenReturn(List.of());
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientServiceFacade.update(testId, patientUpsertDTO));
+
+            assertEquals(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND, exception.getCode());
+            verify(patientService, never()).update(any());
         }
     }
 
