@@ -2,6 +2,7 @@ package si.result.project.eearly.port.algorithmexecution;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -9,8 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.event.notification.event.ExecutionCompletedEvent;
+import si.result.project.eearly.event.notification.event.ExecutionFailedEvent;
+import si.result.project.eearly.event.notification.event.ExecutionStartedEvent;
 import si.result.project.eearly.model.algorithmexecution.AlgorithmExecution;
 import si.result.project.eearly.model.algorithmexecution.AlgorithmExecutionStatus;
+import si.result.project.eearly.model.algorithmexecution.AlgorithmExecutionTriggerType;
 import si.result.project.eearly.model.algorithmexecution.command.CreateAlgorithmExecutionCommand;
 import si.result.spring.boot.bricks.exception.DomainException;
 
@@ -22,6 +27,7 @@ import java.util.UUID;
 public class AlgorithmExecutionService {
 
     private final AlgorithmExecutionRepository algorithmExecutionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AlgorithmExecution findById(UUID id) {
         return algorithmExecutionRepository.findById(id)
@@ -66,7 +72,15 @@ public class AlgorithmExecutionService {
         log.info("Creating AlgorithmExecution: {}", command);
         final var algorithmExecution = AlgorithmExecution.create(command);
         log.debug("AlgorithmExecution crated with ID: {}", algorithmExecution.getId());
-        return algorithmExecutionRepository.save(algorithmExecution);
+        final AlgorithmExecution savedExecution = algorithmExecutionRepository.save(algorithmExecution);
+        if (savedExecution.getTriggerType() == AlgorithmExecutionTriggerType.SCHEDULED
+                && savedExecution.getPatient() != null) {
+            eventPublisher.publishEvent(new ExecutionStartedEvent(
+                    savedExecution.getId(),
+                    savedExecution.getPatient().getId(),
+                    resolveAlgorithmName(savedExecution)));
+        }
+        return savedExecution;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -92,7 +106,15 @@ public class AlgorithmExecutionService {
         execution.setResultData(resultData);
         execution.setErrorMessage(null);
         execution.updateStatus(AlgorithmExecutionStatus.COMPLETED);
-        algorithmExecutionRepository.save(execution);
+        final AlgorithmExecution savedExecution = algorithmExecutionRepository.save(execution);
+        if (savedExecution.getTriggerType() == AlgorithmExecutionTriggerType.SCHEDULED
+                && savedExecution.getPatient() != null
+                && savedExecution.getAnalysis() == null) {
+            eventPublisher.publishEvent(new ExecutionCompletedEvent(
+                    savedExecution.getId(),
+                    savedExecution.getPatient().getId(),
+                    resolveAlgorithmName(savedExecution)));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -105,7 +127,13 @@ public class AlgorithmExecutionService {
         }
         execution.setErrorMessage(errorMessage);
         execution.updateStatus(AlgorithmExecutionStatus.FAILED);
-        algorithmExecutionRepository.save(execution);
+        final AlgorithmExecution savedExecution = algorithmExecutionRepository.save(execution);
+        if (savedExecution.getPatient() != null) {
+            eventPublisher.publishEvent(new ExecutionFailedEvent(
+                    id,
+                    savedExecution.getPatient().getId(),
+                    resolveAlgorithmName(savedExecution)));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -123,6 +151,12 @@ public class AlgorithmExecutionService {
         final AlgorithmExecution execution = findById(id);
         execution.setExternalRequestId(taskId);
         algorithmExecutionRepository.save(execution);
+    }
+
+    private static String resolveAlgorithmName(final AlgorithmExecution execution) {
+        return execution.getAlgorithm() != null && execution.getAlgorithm().getName() != null
+                ? execution.getAlgorithm().getName()
+                : "Algorithm";
     }
 
 }

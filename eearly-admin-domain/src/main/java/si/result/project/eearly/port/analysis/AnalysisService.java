@@ -2,6 +2,7 @@ package si.result.project.eearly.port.analysis;
 
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -10,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import si.result.project.eearly.event.notification.event.AnalysisErrorEvent;
+import si.result.project.eearly.event.notification.event.AnalysisReadyEvent;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.analysis.AnalysisState;
@@ -23,6 +26,7 @@ import si.result.spring.boot.bricks.exception.DomainException;
 public class AnalysisService {
 
     private final AnalysisRepository analysisRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public Analysis findById(UUID id) {
         return analysisRepository.findById(id)
@@ -55,7 +59,9 @@ public class AnalysisService {
         log.info("Updating analysis {} with state {} detected {}", analysisId, state, detected);
         final var analysis = findById(analysisId);
         analysis.applyAlgorithmResult(state, detected);
-        return analysisRepository.save(analysis);
+        final var saved = analysisRepository.save(analysis);
+        publishStateEvent(saved);
+        return saved;
     }
 
     @Transactional
@@ -63,6 +69,19 @@ public class AnalysisService {
         log.info("Updating analysis {} state to {}", analysisId, state);
         final Analysis analysis = findById(analysisId);
         analysis.applyAlgorithmResult(state, analysis.getDetected());
-        return analysisRepository.save(analysis);
+        final Analysis saved = analysisRepository.save(analysis);
+        publishStateEvent(saved);
+        return saved;
+    }
+
+    private void publishStateEvent(final Analysis analysis) {
+        if (analysis.getPatient() == null) {
+            return;
+        }
+        if (analysis.getState() == AnalysisState.WAITING_FOR_CONFIRMATION) {
+            eventPublisher.publishEvent(new AnalysisReadyEvent(analysis.getId(), analysis.getPatient().getId()));
+        } else if (analysis.getState() == AnalysisState.ERROR) {
+            eventPublisher.publishEvent(new AnalysisErrorEvent(analysis.getId(), analysis.getPatient().getId()));
+        }
     }
 }

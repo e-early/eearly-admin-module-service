@@ -114,7 +114,7 @@ class AnalysisTriggerTypeRestIntegrationTest {
         when(algorithmService.findById(ALGORITHM_ID))
                 .thenReturn(algorithmRepository.findById(ALGORITHM_ID).orElseThrow());
         final var facade = new AnalysisServiceFacade(
-                new AnalysisService(analysisDAO),
+                new AnalysisService(analysisDAO, event -> { }),
                 algorithmService,
                 new AnalysisMapperImpl(),
                 patientService,
