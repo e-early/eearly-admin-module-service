@@ -6,11 +6,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.patient.Patient;
+import si.result.project.eearly.model.patient.PatientLanguage;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
 import si.result.project.eearly.model.patient.command.UpdatePatientCommand;
 import si.result.spring.boot.bricks.exception.DomainException;
+import si.result.spring.boot.bricks.validation.Condition;
 
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +38,25 @@ public class PatientService {
         return patientRepository.findAll(specification, pageable);
     }
 
+    /**
+     * The patient, if they are assigned to the caretaker; otherwise {@code PATIENT_NOT_FOUND}, as for a patient that
+     * does not exist, so that the answer does not tell whether another caretaker's patient exists.
+     */
+    @Transactional(readOnly = true)
+    public Patient findByIdForCaretaker(final UUID id, final UUID caretakerId) {
+        final Patient patient = findById(id);
+        if (!isAssignedToCaretaker(patient, caretakerId)) {
+            log.error("Patient with ID {} is not assigned to caretaker {}", id, caretakerId);
+            throw new DomainException(DomainExceptionCode.PATIENT_NOT_FOUND);
+        }
+        return patient;
+    }
+
+    private boolean isAssignedToCaretaker(final Patient patient, final UUID caretakerId) {
+        final List<Caretaker> caretakers = patient.getCaretakers();
+        return caretakers != null && caretakers.stream().anyMatch(caretaker -> caretakerId.equals(caretaker.getId()));
+    }
+
     public List<Patient> findAllById(final List<UUID> ids) {
         return patientRepository.findAllById(ids);
     }
@@ -54,6 +77,23 @@ public class PatientService {
         final var patient = findById(command.getId());
         patient.update(command);
         log.debug("Patient updated with ID: {}", patient.getId());
+        return patientRepository.save(patient);
+    }
+
+    /**
+     * Sets the language a patient picked in the app. The mobile backend already has it, so this
+     * deliberately doesn't sync the patient back.
+     */
+    @Transactional
+    public Patient changeLanguage(final UUID keycloakId, final String language) {
+        Condition.check(PatientLanguage.isSupported(language), DomainExceptionCode.PATIENT_LANGUAGE_UNSUPPORTED);
+        final var patient = patientRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> {
+                    log.error("Patient with Keycloak ID {} not found", keycloakId);
+                    return new DomainException(DomainExceptionCode.PATIENT_NOT_FOUND);
+                });
+        log.info("Changing language of patient {} to {}", patient.getId(), language);
+        patient.changeLanguage(language);
         return patientRepository.save(patient);
     }
 

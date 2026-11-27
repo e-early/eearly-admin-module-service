@@ -31,9 +31,13 @@ import si.result.project.eearly.mapper.analysis.DetectionBoxDataMapper;
 import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.analysis.AnalysisDetectionBox;
 import si.result.project.eearly.model.analysis.AnalysisState;
+import si.result.project.eearly.model.analysis.AnalysisTriggerType;
+import si.result.project.eearly.model.analysis.DetectionBoxSources;
 import si.result.project.eearly.model.analysis.FeedbackState;
 import si.result.project.eearly.model.analysis.command.CreateAnalysisCommand;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
+import si.result.project.eearly.port.algorithmexecution.CallbackTokenService;
 import si.result.project.eearly.port.analysis.AnalysisDetectionBoxService;
 import si.result.project.eearly.port.analysis.AnalysisService;
 import si.result.project.eearly.port.patient.PatientService;
@@ -51,6 +55,8 @@ public class AnalysisServiceFacade {
     private final AnalysisMapper analysisMapper;
     private final PatientService patientService;
     private final AnalysisDetectionBoxService analysisDetectionBoxService;
+    private final AlgorithmExecutionService algorithmExecutionService;
+    private final CallbackTokenService callbackTokenService;
 
     @Transactional(readOnly = true)
     public PagedModel<AnalysisLiteDTO> getPage(final Filter filter, final Pageable pageable) {
@@ -67,14 +73,7 @@ public class AnalysisServiceFacade {
     }
 
     public AnalysisState getAnalysisState(AnalysisState state, FeedbackState feedback) {
-        switch (feedback) {
-            case REJECTED -> state = AnalysisState.REJECTED;
-            case CONFIRMED -> state = AnalysisState.CONFIRMED;
-            default -> {
-                return state;
-            }
-        }
-        return state;
+        return AnalysisState.fromFeedback(state, feedback);
     }
 
     @Transactional(readOnly = true)
@@ -112,7 +111,8 @@ public class AnalysisServiceFacade {
                 patient,
                 algorithm,
                 selections,
-                chartDisplayOptionsJson
+                chartDisplayOptionsJson,
+                AnalysisTriggerType.MANUAL
         );
 
         final var analysis = analysisService.create(command);
@@ -122,22 +122,86 @@ public class AnalysisServiceFacade {
 
     @Transactional
     public AnalysisDTO updateResult(final UUID analysisId, final AnalysisResultCallbackDTO callback) {
+        return toAnalysisDto(applyResult(analysisId, callback).analysis());
+    }
+
+    /**
+     * Result reported from outside, by the HTTP endpoints. If the request was authenticated by a callback token (a
+     * non-null {@code callbackToken}) the token is verified against {@code analysisId} and used up, in this very
+     * transaction: a result that fails to process rolls the use of the token back, so the provider may retry with
+     * the same token. A request authenticated by a Keycloak JWT has no token and is not checked here.
+     *
+     * <p>The still-active execution of the analysis, if any, is completed (or failed, for a result in the ERROR
+     * state) with it, in the same transaction, so that it does not stay RUNNING until the stuck-execution sweep
+     * fails it.
+     */
+    @Transactional
+    public AnalysisDTO updateResult(
+            final UUID analysisId,
+            final AnalysisResultCallbackDTO callback,
+            final String callbackToken) {
+        if (callbackToken != null) {
+            callbackTokenService.verifyAndConsume(callbackToken, analysisId);
+        }
+        final AppliedResult applied = applyResult(analysisId, callback);
+        completeLinkedAlgorithmExecution(analysisId, applied.resolvedState(), callback);
+        return toAnalysisDto(applied.analysis());
+    }
+
+    private record AppliedResult(Analysis analysis, AnalysisState resolvedState) {
+    }
+
+    private AppliedResult applyResult(final UUID analysisId, final AnalysisResultCallbackDTO callback) {
         final Analysis analysis = analysisService.findById(analysisId);
         analysisDetectionBoxService.replaceAlgorithmDetections(
                 analysis,
                 DetectionBoxDataMapper.toDataList(callback.detections())
         );
+        final AnalysisState resolvedState = resolveStateAfterAlgorithmResult(
+                callback.state(),
+                callback.detections()
+        );
         final Analysis saved = analysisService.updateResult(
                 analysisId,
-                callback.state(),
-                callback.detected()
+                resolvedState,
+                resolveDetectedValue(callback)
         );
-        return toAnalysisDto(saved);
+        return new AppliedResult(saved, resolvedState);
+    }
+
+    private void completeLinkedAlgorithmExecution(
+            final UUID analysisId, final AnalysisState resolvedState, final AnalysisResultCallbackDTO callback) {
+        algorithmExecutionService.findLatestActiveByAnalysisId(analysisId).ifPresent(execution -> {
+            if (resolvedState == AnalysisState.ERROR) {
+                algorithmExecutionService.failFromCallback(execution.getId(), "Callback reported ERROR state");
+                return;
+            }
+            String resultData = null;
+            try {
+                resultData = JsonUtils.toJson(callback);
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize callback for AlgorithmExecution {}", execution.getId(), e);
+            }
+            algorithmExecutionService.completeFromCallback(execution.getId(), resultData);
+        });
+    }
+
+    /**
+     * The analysis detected flag is mandatory, but callers of this callback may omit the field. Falls back to
+     * whether the callback reported any detections at all, the same signal
+     * {@link #resolveStateAfterAlgorithmResult} uses.
+     */
+    static boolean resolveDetectedValue(final AnalysisResultCallbackDTO callback) {
+        if (callback.detected() != null) {
+            return callback.detected();
+        }
+        return callback.detections() != null && !callback.detections().isEmpty();
     }
 
     /**
      * Persists algorithm prediction boxes before updating analysis state so GET never
-     * returns a terminal state with an empty detections list.
+     * returns WAITING_FOR_CONFIRMATION with an empty detections list.
+     * Zero algorithm boxes resolve to COMPLETED (nothing to confirm).
      */
     @Transactional
     public void persistAlgorithmPredictions(
@@ -155,9 +219,25 @@ public class AnalysisServiceFacade {
         );
         analysisService.updateResult(
                 analysisId,
-                AnalysisState.COMPLETED,
+                resolveStateAfterAlgorithmResult(AnalysisState.WAITING_FOR_CONFIRMATION, detections),
                 detected
         );
+    }
+
+    /**
+     * Successful algorithm finish with detections resolves to WAITING_FOR_CONFIRMATION;
+     * no detections resolve to COMPLETED; ERROR stays ERROR.
+     */
+    static AnalysisState resolveStateAfterAlgorithmResult(
+            final AnalysisState requestedState,
+            final List<?> detections) {
+        if (requestedState == AnalysisState.ERROR) {
+            return AnalysisState.ERROR;
+        }
+        if (detections == null || detections.isEmpty()) {
+            return AnalysisState.COMPLETED;
+        }
+        return AnalysisState.WAITING_FOR_CONFIRMATION;
     }
 
     @Transactional
@@ -166,10 +246,48 @@ public class AnalysisServiceFacade {
             final UUID detectionId,
             final DetectionFeedbackDTO body) {
         validateDetectionFeedback(body);
-        analysisService.findById(analysisId);
+        final Analysis analysis = analysisService.findById(analysisId);
         analysisDetectionBoxService.updateCaretakerFeedback(analysisId, detectionId, body.feedback());
+
+        final List<AnalysisDetectionBox> boxes =
+                analysisDetectionBoxService.findActiveByAnalysisId(analysisId);
+        if (shouldCompleteAfterDetectionFeedback(analysis, boxes)) {
+            analysisService.updateState(analysisId, AnalysisState.COMPLETED);
+        }
+
         final Analysis saved = analysisService.findById(analysisId);
         return toAnalysisDto(saved);
+    }
+
+    /**
+     * Completes the analysis when every algorithm detection box has caretaker feedback.
+     * Caretaker-created boxes are ignored.
+     */
+    static boolean shouldCompleteAfterDetectionFeedback(
+            final Analysis analysis,
+            final List<AnalysisDetectionBox> boxes) {
+        if (analysis == null || analysis.getState() != AnalysisState.WAITING_FOR_CONFIRMATION) {
+            return false;
+        }
+        return allAlgorithmDetectionsHaveFeedback(boxes);
+    }
+
+    static boolean allAlgorithmDetectionsHaveFeedback(final List<AnalysisDetectionBox> boxes) {
+        if (boxes == null || boxes.isEmpty()) {
+            return false;
+        }
+        final List<AnalysisDetectionBox> algorithmBoxes = boxes.stream()
+                .filter(box -> !DetectionBoxSources.isCaretakerSource(box.getSource()))
+                .toList();
+        if (algorithmBoxes.isEmpty()) {
+            return false;
+        }
+        return algorithmBoxes.stream().allMatch(AnalysisServiceFacade::hasCaretakerFeedback);
+    }
+
+    private static boolean hasCaretakerFeedback(final AnalysisDetectionBox box) {
+        final FeedbackState feedback = box.getCaretakerFeedback();
+        return feedback == FeedbackState.CONFIRMED || feedback == FeedbackState.REJECTED;
     }
 
     @Transactional

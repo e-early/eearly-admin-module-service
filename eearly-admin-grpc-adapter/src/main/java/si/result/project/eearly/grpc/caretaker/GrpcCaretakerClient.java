@@ -8,6 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Service;
+import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
 import si.result.eearly.genproto.CaretakerServiceGrpc;
 import si.result.eearly.genproto.ErrorCode;
@@ -24,25 +27,40 @@ import java.util.concurrent.TimeUnit;
 public class GrpcCaretakerClient implements CaretakerClient {
 
     private final GrpcChannelFactory channelFactory;
+    private final ClientInterceptor grpcAuthInterceptor;
 
     @Override
     public void upsertCaretaker(Caretaker caretaker) {
         log.info("Upserting caretaker: {}", caretaker.getId());
 
         ManagedChannel channel = channelFactory.createChannel("mobile-backend");
-        CaretakerServiceGrpc.CaretakerServiceFutureStub stub = CaretakerServiceGrpc.newFutureStub(channel);
+        // The mobile service accepts UpsertCaretaker only from the admin service client.
+        Channel authenticatedChannel = ClientInterceptors.intercept(channel, grpcAuthInterceptor);
+        CaretakerServiceGrpc.CaretakerServiceFutureStub stub = CaretakerServiceGrpc.newFutureStub(authenticatedChannel);
 
         si.result.eearly.genproto.Caretaker protoCaretaker = si.result.eearly.genproto.Caretaker.newBuilder()
                 .setId(caretaker.getId().toString())
                 .setName(caretaker.getFirstName() + " " + caretaker.getLastName())
-                .setFacilityId("")
+                // The mobile service knows the caretaker's organization as its facility. The department
+                // is not part of the caretaker message.
+                .setFacilityId(caretaker.getOrganization() == null
+                        ? "" : caretaker.getOrganization().getId().toString())
                 .build();
 
         UpsertCaretakerRequest request = UpsertCaretakerRequest.newBuilder()
                 .setCaretaker(protoCaretaker)
                 .build();
 
-        ListenableFuture<UpsertCaretakerResponse> futureResponse = stub.upsertCaretaker(request);
+        ListenableFuture<UpsertCaretakerResponse> futureResponse;
+        try {
+            futureResponse = stub.upsertCaretaker(request);
+        } catch (RuntimeException e) {
+            // For example no access token: log like any other failed call, never break the caller.
+            log.error("Error calling CaretakerService.UpsertCaretaker for caretaker {}: {}",
+                    caretaker.getId(), e.getMessage(), e);
+            shutdownChannel(channel);
+            return;
+        }
 
         Futures.addCallback(futureResponse, new FutureCallback<>() {
             @Override

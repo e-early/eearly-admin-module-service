@@ -18,7 +18,7 @@ public record AlgorithmExecutionUpsertDTO(
         @Schema(example = "d7e1c2f4-5b6a-4c33-8a11-1e2f3d4c5b66", nullable = true)
         UUID analysisId,
 
-        @Schema(example = "MANUAL")
+        @Schema(example = "MANUAL", description = "Ignored: executions created through this API are always MANUAL")
         String triggerType,
 
         @JsonDeserialize(using = StringOrJsonDeserializer.class)

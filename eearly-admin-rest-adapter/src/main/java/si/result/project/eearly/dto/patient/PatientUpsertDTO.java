@@ -48,9 +48,16 @@ public record PatientUpsertDTO(
         @Schema(example = "1234567890")
         String phoneNumber,
 
+        @Schema(example = "sl", allowableValues = {"sl", "en"},
+                description = "Language of the patient's app, notifications and emails. "
+                        + "Omitted: 'sl' on create, unchanged on update.")
+        String language,
+
         List<UUID> caretakerList,
 
         List<UUID> measurementList,
+
+        List<UUID> healthConditionList,
 
         List<UUID> algorithmsList
 ) {}

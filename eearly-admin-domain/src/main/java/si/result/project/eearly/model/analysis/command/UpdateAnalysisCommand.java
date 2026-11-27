@@ -16,7 +16,7 @@ public class UpdateAnalysisCommand extends CreateAnalysisCommand {
 
     public UpdateAnalysisCommand(UUID id, String name, AnalysisState state, FeedbackState feedback,
                                  Boolean detected, Patient idPatient) {
-        super(name, state, feedback, detected, idPatient, null, null, null);
+        super(name, state, feedback, detected, idPatient, null, null, null, null);
         this.id = id;
     }
 }

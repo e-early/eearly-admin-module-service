@@ -10,7 +10,11 @@ Supports:
 - analyses with **time-range selections**
 - algorithm executions (`POST /predict` on the hosted model)
 
-Does **not** include organization/department/health-condition management, QR onboarding, email, or development simulation.
+- **QR code onboarding** (`/api/v1/qrcodes`, see [QR code onboarding](#qr-code-onboarding))
+
+Does **not** include organization/department/health-condition management. Algorithm executions can be simulated
+without algorithm containers with the `simulation` profile (see [Algorithm simulation](#algorithm-simulation)).
+The QR code message is sent through the e-mail infrastructure (see [E-mail](#e-mail)).
 
 ---
 
@@ -21,7 +25,7 @@ Does **not** include organization/department/health-condition management, QR onb
 | Java | 21+ |
 | Maven | 3.9+ |
 | Docker | admin Postgres; also EHR + mobile infra |
-| Nexus | *optional* — `https://<nexus-host>` (parent POM + internal deps); not required to build, see below |
+| Nexus | `https://nexus.result.si` (parent POM + internal `si.result.lib` deps); required to build, see below |
 | `grpcurl` | for ingesting measurements into mobile (optional install below) |
 | `jq` | helpful for curl responses |
 
@@ -120,7 +124,99 @@ java -jar eearly-admin-service/target/eearly-admin-service.jar \
 
 Profile `unrestricted` = no JWT required on admin REST (local testing).
 
+### Algorithm simulation
+
+Profile `simulation` runs analyses without any algorithm container. It replaces the HTTP adapter to the
+algorithm containers with a stand-in that, a few seconds after an execution is created, stores two fixed demo
+detections on the linked analysis (state `WAITING_FOR_CONFIRMATION`) and completes the execution.
+
+```bash
+SPRING_PROFILES_ACTIVE=development,unrestricted,simulation java -jar eearly-admin-service/target/eearly-admin-service.jar
+```
+
+- **The results are fabricated demo data, not the output of a model. Never use this profile with real patients
+  or for clinical decisions.** A warning is logged at startup.
+- Executions completed by the simulation carry the result data `{"source":"simulation"}`. The analysis itself and its
+  detections are not marked, so do not mix simulated and real data in one database.
+- Only executions linked to an analysis are simulated; an execution without one is marked as failed.
+- `simulation.delay-ms` (default `3000`) sets the simulated processing time.
+- Without the profile nothing changes: the real adapter is used and no simulation bean exists.
+
 ---
+
+## Webhook-style algorithm providers (optional)
+
+By default the service calls an algorithm and waits for the answer in the HTTP response. A provider that needs
+longer can instead answer `202 Accepted` and report the result later to
+`POST {SERVICE_DOMAIN_URL}/api/v1/analyses/{analysisId}/result?token=...`. This is **off until you configure a
+secret**; without one nothing below applies and the service behaves exactly as before (Keycloak JWT only on every
+endpoint).
+
+### Callback token
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_CALLBACK_TOKEN_SECRET` | empty (off) | HMAC-SHA256 secret, at least 32 bytes. A shorter value stops the start-up. |
+| `ALGORITHM_CALLBACK_TOKEN_TTL` | `PT15M` | How long a token is valid (ISO-8601 duration). |
+
+Generate a secret and keep it out of version control:
+
+```bash
+export ALGORITHM_CALLBACK_TOKEN_SECRET="$(openssl rand -base64 48)"
+```
+
+With a secret set:
+
+- the callback URL sent to the provider carries a signed token that is bound to one execution and one analysis and
+  can be used **once**; a new execution gets a new token;
+- `POST /api/v1/analyses/{id}/result` and `POST /api/v1/analyses/results` accept **either** a valid Keycloak JWT
+  **or** a valid token in the `token` query parameter. All other endpoints still need a JWT, and a request with
+  neither is answered `401` before it reaches the application;
+- a token that is expired, already used, forged or issued for another analysis is answered `401` with the same
+  message, whatever the reason;
+- the token is used up in the same database transaction that stores the result, so a result that fails to process
+  can be sent again with the same token;
+- the query parameter `token` (and a few similar ones, such as `access_token` and `password`) is masked as
+  `token=***` in the request log. Do not put the full callback URL into logs of your own.
+
+A provider that answers `202` while no secret is set cannot call back: the service logs a warning and the execution
+stays `RUNNING` until the sweep below fails it.
+
+### Stuck executions
+
+An execution that is still `SUBMITTED` or `RUNNING` after the timeout is marked `FAILED`, and its analysis (if it is
+still open) is set to `ERROR`.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_STUCK_SWEEP_ENABLED` | `true` | Switch the sweep off with `false`. |
+| `ALGORITHM_STUCK_SWEEP_POLL_INTERVAL_MS` | `300000` | How often it looks. |
+| `ALGORITHM_STUCK_SWEEP_TIMEOUT_MINUTES` | `90` | Age after which an execution counts as stuck. |
+
+The timeout must be longer than the HTTP timeout towards the algorithm (`BENTOML_TIMEOUT`, default 3600 s);
+otherwise the service refuses to start, so that a call that is still being waited for is never failed.
+
+### Credentials per algorithm
+
+An algorithm can have its own Basic authentication username and password for its service endpoint. They are used
+instead of the global `ALGORITHM_BASIC_AUTH_*` / `BENTOML_API_KEY` for that algorithm, for calls, cancellation and
+health checks. Send `authUsername` and `authPassword` when you create or update the algorithm; send nothing to leave
+them unchanged, or an empty string to remove them.
+
+The password is stored encrypted (AES-256-GCM) and is never returned by the API or written to the log; the API only
+says whether one is stored (`authPasswordSet`). Encryption needs a key:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ALGORITHM_CREDENTIALS_ENCRYPTION_KEY` | empty | Base64 of exactly 32 bytes. |
+
+```bash
+export ALGORITHM_CREDENTIALS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+Without a key, setting a password is refused with a clear error and a stored password cannot be used (the call fails
+with a message instead of falling back to the global credentials). Keep the key: with another key a stored password
+can no longer be read and has to be entered again.
 
 ## Seed data (`development` profile)
 
@@ -159,7 +255,7 @@ EHR templates ready
         ↓
 Admin POST /patients          → admin DB + mobile Keycloak user + EHR
         ↓
-Mobile GET /onboarding/{userId}/configuration  → patient JWT
+Mobile GET /onboarding/{code}/configuration  → patient JWT (single-use link)
         ↓
 gRPC CreateMeasurement (HR)   → EHRbase
 gRPC CreateMeasurement (SpO₂)   → EHRbase   ← two calls, two batch IDs
@@ -183,15 +279,87 @@ curl -s http://localhost:9091/realms/eearly-mobile/.well-known/openid-configurat
 curl -s http://localhost:9000/actuator/health
 ```
 
-Extract Keycloak user id from patient response (do **not** use `sed 's|.*/||'` on the full URL):
+Redeem the patient's single-use onboarding link once and keep the response:
 
 ```bash
 export PATIENT_ID=$(jq -r '.payload.id' /tmp/patient.json)
-export USER_ID=$(jq -r '.payload.onboardingUrl' /tmp/patient.json \
-  | sed -E 's|.*/onboarding/||; s|/configuration$||')
+curl -s "$(jq -r '.payload.onboardingUrl' /tmp/patient.json)/configuration" > /tmp/onboarding.json
+export ACCESS_TOKEN=$(jq -r '.accessToken' /tmp/onboarding.json)
+export USER_ID=$(jq -r '.userId' /tmp/onboarding.json)
 ```
 
 See the full guide for template upload, ingest scripts, env vars, and success criteria.
+
+---
+
+## E-mail
+
+The service sends e-mail (currently the patient QR code message) through an SMTP server, on a separate thread pool.
+A failed send is logged and never fails the request. Logs contain only the message type and a random message id,
+never recipients, names, codes or message bodies.
+
+For local development run a catch-all SMTP server, for example
+`docker run --rm -p 1025:1025 -p 8025:8025 axllent/mailpit`, and start the service with the `development` profile
+(SMTP `localhost:1025`; read the messages at `http://localhost:8025`).
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MAIL_HOST` | `localhost` | SMTP host |
+| `MAIL_PORT` | `25` (`development`: `1025`) | SMTP port |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | SMTP credentials |
+| `MAIL_SMTP_AUTH` | `false` | authenticate against the server |
+| `MAIL_SMTP_STARTTLS` | `false` | upgrade to TLS with STARTTLS |
+| `MAIL_SMTP_SSL` | `false` | TLS from the start (implicit TLS, usually port 465) |
+| `MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_TIMEOUT_MS` | `10000`, `60000` | connect and read/write timeouts |
+| `EMAIL_FROM` | `noreply@example.org` | sender address of every message |
+| `EMAIL_APP_NAME` | `eEarly` | sender name and application name in the text |
+| `EMAIL_ALLOWED_RECIPIENT_DOMAINS` | `*` | comma-separated recipient domains; others are skipped (use on test systems) |
+| `EMAIL_APP_DOWNLOAD_URL` | empty | http(s) link to the mobile app, shown in the QR code message; empty omits it |
+| `EMAIL_TEMPLATE_FOLDER` | `classpath:templates/email/` | folder of the templates (`classpath:` or `file:`) |
+| `EMAIL_TEMPLATE` | `qr-code-email.html` | QR code template (Slovenian, the default language) |
+| `EMAIL_LOGO` | `classpath:images/email-logo.png` | logo in the messages; empty sends none |
+
+**Languages.** A patient's language (`sl` default, or `en`) selects the template: `EMAIL_TEMPLATE` for Slovenian and
+the same name with `-en` before the extension (`qr-code-email-en.html`) for English.
+
+**Branding.** The bundled templates and logo are neutral. To brand the messages, copy `templates/email/` from
+`eearly-admin-service/src/main/resources` to a folder of your own, edit the HTML and the logo, and point
+`EMAIL_TEMPLATE_FOLDER` and `EMAIL_LOGO` at them, for example `file:/etc/eearly/email-templates/`. Placeholders
+are written `{{NAME}}`: `APP_NAME`, `PATIENT_NAME`, `CARETAKER_NAME`, `QR_CODE_IMAGE`, `APP_DOWNLOAD_LINK` and
+`LOGO`. Values are HTML-escaped.
+
+---
+
+## QR code onboarding
+
+A caretaker creates a QR code for a patient assigned to them; the patient scans it (or receives it by e-mail) to
+set up the mobile app. Each code holds a random token and a single-use onboarding link that the mobile service
+issues for the patient when the code is created; the patient must already have a mobile user (created with the
+patient). Creating a new code asks the mobile service for a new link, which invalidates the patient's earlier
+links, and revokes the patient's earlier active codes. A code is valid for the validity of the links
+(`ONBOARDING_CODE_VALIDITY`, 30 days by default); a code that is used, revoked or expired cannot be sent by e-mail.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/v1/qrcodes` | create a code for `patientId`; 201. `onboardingUrl` and `caretakerId` in the request are ignored |
+| `GET /api/v1/qrcodes` | page of the codes of the caller's patients |
+| `GET /api/v1/qrcodes/{id}` | one code |
+| `GET /api/v1/qrcodes/patient/{id}` | the latest code of a patient |
+| `POST /api/v1/qrcodes/send-email` | send the code (`qrCodeId`, `appName`) to the patient's own e-mail address, in the patient's language |
+
+Access: an authenticated caller who is a caretaker, and only for patients assigned to that caretaker. The
+recipient of the e-mail is always the patient's address; the request cannot choose one. Requests without a token
+get 401.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `QR_CODE_LINK_BASE_URL` | empty | app-link page the code points at; empty encodes the issued onboarding link itself |
+| `ONBOARDING_CODE_VALIDITY` | `P30D` | validity of a code, an ISO-8601 duration; keep it equal to the onboarding link validity of the mobile service |
+| `QR_CODE_ALLOW_HTTP_ONBOARDING_URL` | `false` (`true` with the `development` profile) | accept a plain `http` onboarding link; otherwise only `https` links of at most 512 characters are accepted |
+| `EMAIL_LOGO` | `classpath:images/email-logo.png` | logo drawn in the middle of the code; empty gives a plain code |
+
+Tokens and onboarding links are not logged. There is no rate limiting in the service; put it in front of the
+endpoints if exposed.
 
 ---
 
@@ -272,11 +440,10 @@ Use profile `unrestricted`, or configure `JWK_SET_URI` and send a Bearer token.
 
 ### Nexus / Maven resolve failure
 
-This project's internal (`si.result.lib`) dependencies are vendored into
-[`libs-repo/`](libs-repo/README.md), so `mvn package` does **not** require VPN/Nexus access —
-if you're hitting a resolve failure, it's most likely a public artifact (Maven Central) instead;
-retry, or check your network. If you *do* have `<nexus-host>` access and prefer to resolve
-from there instead of the vendored copies, see the note in `libs-repo/README.md`.
+This project's internal `si.result.lib` libraries (including the parent POM) are resolved from
+Result's Nexus (`https://nexus.result.si/repository/result-lib/`, declared in the root `pom.xml`)
+until they are published publicly, so the build needs access to it (VPN). Public artifacts
+come from Maven Central; if you hit a resolve failure for those, retry or check your network.
 
 ---
 

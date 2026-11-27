@@ -13,6 +13,7 @@ import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.auditable.Auditable;
 import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
 import si.result.project.eearly.model.patient.command.UpdatePatientCommand;
@@ -77,6 +78,9 @@ public class Patient extends Auditable {
     @Column(name = "timezone", length = 64, nullable = false)
     private String timezone = "Europe/Ljubljana";
 
+    @Column(name = "language", length = 3, nullable = false)
+    private String language = PatientLanguage.DEFAULT;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "t_patient_caretaker",
@@ -92,6 +96,14 @@ public class Patient extends Auditable {
             inverseJoinColumns = @JoinColumn(name = "measurement_id")
     )
     private List<Measurement> measurements;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "t_patient_health_condition",
+            joinColumns = @JoinColumn(name = "patient_id"),
+            inverseJoinColumns = @JoinColumn(name = "condition_id")
+    )
+    private List<HealthCondition> healthConditions;
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "patient")
     private List<Analysis> analyses;
@@ -120,8 +132,10 @@ public class Patient extends Auditable {
         patient.setCountry(command.getCountry());
         patient.setEmail(command.getEmail());
         patient.setPhoneNumber(command.getPhoneNumber());
+        patient.changeLanguage(command.getLanguage());
         patient.setCaretakers(command.getCaretakers());
         patient.setMeasurements(command.getMeasurements());
+        patient.setHealthConditions(command.getHealthConditions());
         patient.setAlgorithms(command.getAlgorithms());
 
         return patient;
@@ -140,8 +154,10 @@ public class Patient extends Auditable {
         setCountry(command.getCountry());
         setEmail(command.getEmail());
         setPhoneNumber(command.getPhoneNumber());
+        changeLanguage(command.getLanguage());
         setCaretakers(command.getCaretakers());
         setMeasurements(command.getMeasurements());
+        setHealthConditions(command.getHealthConditions());
         setAlgorithms(command.getAlgorithms());
     }
 
@@ -215,12 +231,29 @@ public class Patient extends Auditable {
         this.phoneNumber = phoneNumber;
     }
 
+    /**
+     * Sets the language of the patient's app, push notifications and emails. A null language
+     * keeps the current one, so a client that doesn't send it (an older admin UI, say) neither
+     * fails nor resets it.
+     */
+    public void changeLanguage(final String language) {
+        if (language == null) {
+            return;
+        }
+        Condition.check(PatientLanguage.isSupported(language), DomainExceptionCode.PATIENT_LANGUAGE_UNSUPPORTED);
+        this.language = language;
+    }
+
     private void setCaretakers(List<Caretaker> caretakers) {
         this.caretakers = caretakers;
     }
 
     private void setMeasurements(List<Measurement> measurements) {
         this.measurements = measurements;
+    }
+
+    private void setHealthConditions(List<HealthCondition> healthConditions) {
+        this.healthConditions = healthConditions;
     }
 
     private void setAlgorithms(List<Algorithm> algorithms) {

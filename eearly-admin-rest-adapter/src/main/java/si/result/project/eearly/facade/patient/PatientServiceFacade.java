@@ -14,6 +14,7 @@ import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.mapper.patient.PatientMapper;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.measurement.MeasurementStatus;
 import si.result.project.eearly.model.mobile.MobileUserResponse;
@@ -22,9 +23,11 @@ import si.result.project.eearly.model.patient.PatientStatus;
 import si.result.project.eearly.model.patient.measurement.PatientMeasurementPage;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
 import si.result.project.eearly.port.caretaker.CaretakerService;
+import si.result.project.eearly.port.healthcondition.HealthConditionService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.mobile.MobileKeycloakService;
 import si.result.project.eearly.port.mobile.MobileServiceService;
+import si.result.project.eearly.port.patient.PatientDemographicsSync;
 import si.result.project.eearly.port.patient.PatientMeasurementClient;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.rest.filter.Filter;
@@ -41,10 +44,12 @@ public class PatientServiceFacade {
     private final PatientMapper patientMapper;
     private final CaretakerService caretakerService;
     private final MeasurementService measurementService;
+    private final HealthConditionService healthConditionService;
     private final AlgorithmService algorithmService;
     private final MobileKeycloakService mobileKeycloakService;
     private final MobileServiceService mobileServiceService;
     private final PatientMeasurementClient patientMeasurementClient;
+    private final PatientDemographicsSync patientDemographicsSync;
     private final Random random = new SecureRandom();
 
     private static final Set<String> VIRTUAL_FIELDS = Set.of("patientStatus", "measurementStatus");
@@ -177,6 +182,7 @@ public class PatientServiceFacade {
                         patientUpsertDTO,
                         getCaretakerRelations(patientUpsertDTO.caretakerList()),
                         getMeasurementRelations(patientUpsertDTO.measurementList()),
+                        getHealthConditionRelations(patientUpsertDTO.healthConditionList()),
                         getAlgorithmRelations(patientUpsertDTO.algorithmsList())));
 
         MobileUserResponse createMobileUserResponse = mobileServiceService.createUser(
@@ -185,20 +191,23 @@ public class PatientServiceFacade {
 
         String keycloakUserId = createMobileUserResponse.user().id();
         patient = patientService.updateKeycloakId(patient.getId(), UUID.fromString(keycloakUserId));
+        patientDemographicsSync.sync(patient);
 
         return patientMapper.toOnboardingDTO(patient, createMobileUserResponse.onboardingUrl());
     }
 
     @Transactional()
     public PatientMinimalDTO update(final UUID uuid, final PatientUpsertDTO patientUpsertDTO) {
-        return patientMapper.toMinimalDTO(
-                patientService.update(
-                        patientMapper.toUpdateCommand(
-                                uuid,
-                                patientUpsertDTO,
-                                getCaretakerRelations(patientUpsertDTO.caretakerList()),
-                                getMeasurementRelations(patientUpsertDTO.measurementList()),
-                                getAlgorithmRelations(patientUpsertDTO.algorithmsList()))));
+        Patient updated = patientService.update(
+                patientMapper.toUpdateCommand(
+                        uuid,
+                        patientUpsertDTO,
+                        getCaretakerRelations(patientUpsertDTO.caretakerList()),
+                        getMeasurementRelations(patientUpsertDTO.measurementList()),
+                        getHealthConditionRelations(patientUpsertDTO.healthConditionList()),
+                        getAlgorithmRelations(patientUpsertDTO.algorithmsList())));
+        patientDemographicsSync.sync(updated);
+        return patientMapper.toMinimalDTO(updated);
     }
 
     private List<Measurement> getMeasurementRelations(List<UUID> measurementIds) {
@@ -208,6 +217,18 @@ public class PatientServiceFacade {
                 throw new DomainException(DomainExceptionCode.MEASUREMENT_NOT_FOUND);
             }
             return measurements;
+        } else {
+            return new ArrayList<>();
+        }
+    }
+
+    private List<HealthCondition> getHealthConditionRelations(List<UUID> healthConditionIds) {
+        if (healthConditionIds != null && !healthConditionIds.isEmpty()) {
+            final var healthConditions = healthConditionService.findAllById(healthConditionIds);
+            if (healthConditions.size() != healthConditionIds.size()) {
+                throw new DomainException(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND);
+            }
+            return healthConditions;
         } else {
             return new ArrayList<>();
         }

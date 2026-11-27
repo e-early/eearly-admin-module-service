@@ -10,6 +10,8 @@ import si.result.project.eearly.dto.analysis.AnalysisFeedbackDTO;
 import si.result.project.eearly.dto.analysis.AnalysisLiteDTO;
 import si.result.project.eearly.dto.analysis.AnalysisSelectionDTO;
 import si.result.project.eearly.dto.analysis.ChartDisplayOptionsDTO;
+import si.result.project.eearly.dto.healthcondition.HealthConditionLiteDTO;
+import si.result.project.eearly.mapper.healthcondition.HealthConditionMapper;
 import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.analysis.AnalysisDetectionBox;
 import si.result.project.eearly.model.analysis.AnalysisSelection;
@@ -17,15 +19,21 @@ import si.result.project.eearly.model.analysis.AnalysisState;
 import si.result.project.eearly.model.analysis.command.UpdateAnalysisCommand;
 import si.result.project.eearly.util.JsonUtils;
 
+import static org.mapstruct.factory.Mappers.getMapper;
+
 @Mapper(uses = {
-    si.result.project.eearly.mapper.patient.PatientMapper.class
+    si.result.project.eearly.mapper.patient.PatientMapper.class,
+    si.result.project.eearly.mapper.healthcondition.HealthConditionMapper.class
 })
 public interface AnalysisMapper {
+
+    HealthConditionMapper healthConditionMapper = getMapper(HealthConditionMapper.class);
 
     @Mapping(target = "state", source = "state")
     AnalysisLiteDTO toLiteDTO(final Analysis analysis, final AnalysisState state);
 
     @Mapping(target = "state", source = "state")
+    @Mapping(target = "healthConditions", expression = "java(mapHealthConditions(analysis))")
     @Mapping(target = "inputParameters", expression = "java(mapInputParameters(analysis))")
     @Mapping(target = "detections", expression = "java(mapAlgorithmDetections(detectionBoxes))")
     @Mapping(target = "caretakerFeedbackDetections", expression = "java(mapCaretakerFeedbackDetections(detectionBoxes))")
@@ -63,6 +71,15 @@ public interface AnalysisMapper {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    default List<HealthConditionLiteDTO> mapHealthConditions(final Analysis analysis) {
+        if (analysis.getPatient() == null || analysis.getPatient().getHealthConditions() == null) {
+            return List.of();
+        }
+        return analysis.getPatient().getHealthConditions().stream()
+                .map(healthConditionMapper::toLiteDTO)
+                .toList();
     }
 
     private AnalysisSelectionDTO toSelectionDTO(final AnalysisSelection selection) {

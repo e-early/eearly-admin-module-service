@@ -9,6 +9,7 @@ import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 import org.hibernate.type.SqlTypes;
 import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.exception.CallbackTokenRejectedException;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.algorithmexecution.command.CreateAlgorithmExecutionCommand;
 import si.result.project.eearly.model.auditable.Auditable;
@@ -81,6 +82,52 @@ public class AlgorithmExecution extends Auditable {
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    // --- Callback token (only used when callback tokens are enabled) ---
+    /** Identifier (jti) of the callback token currently issued for this execution; the token itself is never stored. */
+    @Column(name = "callback_token_id")
+    private UUID callbackTokenId;
+
+    @Column(name = "callback_token_expires_at")
+    private Instant callbackTokenExpiresAt;
+
+    @Column(name = "callback_token_consumed_at")
+    private Instant callbackTokenConsumedAt;
+
+    // --- Callback token lifecycle ---
+
+    /**
+     * Records the single-use token issued for this execution's result callback, replacing any earlier (and not yet
+     * used) one.
+     */
+    public void issueCallbackToken(final UUID tokenId, final Instant expiresAt) {
+        this.callbackTokenId = tokenId;
+        this.callbackTokenExpiresAt = expiresAt;
+        this.callbackTokenConsumedAt = null;
+    }
+
+    /**
+     * Uses the callback token up. Allowed exactly once per issued token, and only while the execution is still
+     * active: a replay after the real callback, a token that was replaced by a newer one, an expired one and one of
+     * an execution that has ended are all refused.
+     */
+    public void consumeCallbackToken(final UUID tokenId, final Instant now) {
+        if (tokenId == null || this.callbackTokenId == null || !this.callbackTokenId.equals(tokenId)) {
+            throw new CallbackTokenRejectedException(CallbackTokenRejectedException.Reason.SUPERSEDED);
+        }
+        if (this.callbackTokenConsumedAt != null) {
+            throw new CallbackTokenRejectedException(CallbackTokenRejectedException.Reason.ALREADY_USED);
+        }
+        if (this.callbackTokenExpiresAt == null || !now.isBefore(this.callbackTokenExpiresAt)) {
+            throw new CallbackTokenRejectedException(CallbackTokenRejectedException.Reason.EXPIRED);
+        }
+        if (this.executionStatus == AlgorithmExecutionStatus.COMPLETED
+                || this.executionStatus == AlgorithmExecutionStatus.FAILED
+                || this.executionStatus == AlgorithmExecutionStatus.CANCELLED) {
+            throw new CallbackTokenRejectedException(CallbackTokenRejectedException.Reason.EXECUTION_NOT_ACTIVE);
+        }
+        this.callbackTokenConsumedAt = now;
+    }
 
     // --- Lifecycle methods ---
     public void updateStatus(AlgorithmExecutionStatus newStatus) {

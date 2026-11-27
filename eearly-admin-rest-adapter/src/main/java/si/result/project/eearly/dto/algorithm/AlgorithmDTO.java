@@ -1,6 +1,7 @@
 package si.result.project.eearly.dto.algorithm;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import si.result.project.eearly.dto.healthcondition.HealthConditionLiteDTO;
 import si.result.project.eearly.dto.measurement.MeasurementLiteDTO;
 import si.result.project.eearly.dto.patient.PatientLiteDTO;
 
@@ -76,6 +77,16 @@ public record AlgorithmDTO (
     List<PatientLiteDTO> patients,
 
     @Schema
-    List<MeasurementLiteDTO> measurements
+    List<MeasurementLiteDTO> measurements,
+
+    @Schema
+    List<HealthConditionLiteDTO> healthConditions
+    ,
+
+    @Schema(example = "sample-user-42", description = "Basic Auth username for the algorithm's service endpoint.")
+    String authUsername,
+
+    @Schema(description = "Whether a password is stored for the algorithm. The password itself is never returned.")
+    Boolean authPasswordSet
 
 ){}

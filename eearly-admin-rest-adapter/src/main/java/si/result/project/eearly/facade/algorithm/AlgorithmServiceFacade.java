@@ -15,9 +15,12 @@ import si.result.project.eearly.dto.algorithm.AlgorithmUpsertDTO;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.mapper.algorithm.AlgorithmMapper;
 import si.result.project.eearly.model.algorithm.Algorithm;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.port.algorithm.AlgorithmService;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService;
+import si.result.project.eearly.port.healthcondition.HealthConditionService;
 import si.result.project.eearly.port.measurement.MeasurementService;
 import si.result.project.eearly.port.patient.PatientService;
 import si.result.project.eearly.util.JsonUtils;
@@ -37,8 +40,10 @@ public class AlgorithmServiceFacade {
 
     private final AlgorithmService algorithmService;
     private final AlgorithmHttpClient algorithmHttpClient;
+    private final AlgorithmCredentialService algorithmCredentialService;
     private final PatientService patientService;
     private final MeasurementService measurementService;
+    private final HealthConditionService healthConditionService;
     private final AlgorithmMapper algorithmMapper;
 
     @Transactional(readOnly = true)
@@ -63,7 +68,8 @@ public class AlgorithmServiceFacade {
                         algorithmMapper.toCreateCommand(
                                 algorithmUpsertDTO,
                                 getPatientRelations(algorithmUpsertDTO.patientList()),
-                                getMeasurementRelations(algorithmUpsertDTO.measurementList()))));
+                                getMeasurementRelations(algorithmUpsertDTO.measurementList()),
+                                getHealthConditionRelations(algorithmUpsertDTO.healthConditionList()))));
     }
 
     @Transactional
@@ -77,7 +83,8 @@ public class AlgorithmServiceFacade {
                         algorithmMapper.toUpdateCommand(
                                 algorithmUpsertDTO,
                                 getPatientRelations(algorithmUpsertDTO.patientList()),
-                                getMeasurementRelations(algorithmUpsertDTO.measurementList())
+                                getMeasurementRelations(algorithmUpsertDTO.measurementList()),
+                                getHealthConditionRelations(algorithmUpsertDTO.healthConditionList())
                         )
                 )
         );
@@ -115,6 +122,18 @@ public class AlgorithmServiceFacade {
         }
     }
 
+    private List<HealthCondition> getHealthConditionRelations(List<UUID> healthConditionIds) {
+        if (healthConditionIds != null && !healthConditionIds.isEmpty()) {
+            final var healthConditions = healthConditionService.findAllById(healthConditionIds);
+            if (healthConditions.size() != healthConditionIds.size()) {
+                throw new DomainException(DomainExceptionCode.HEALTH_CONDITION_NOT_FOUND);
+            }
+            return healthConditions;
+        } else {
+            return new ArrayList<>();
+        }
+    }
+
     public AlgorithmServiceStatusDTO getServiceStatus(UUID id) {
         final Algorithm algorithm = algorithmService.findById(id);
 
@@ -123,8 +142,12 @@ public class AlgorithmServiceFacade {
         }
 
         try {
+            // The algorithm's own credentials when it has any, else the global ones of the client.
+            final var credentials = algorithmCredentialService.resolve(algorithm);
             final java.net.http.HttpResponse<String> response = algorithmHttpClient.send(
-                    "GET", algorithm.getHealthUrl(), null, HEALTH_CHECK_TIMEOUT_SECONDS);
+                    "GET", algorithm.getHealthUrl(), null, HEALTH_CHECK_TIMEOUT_SECONDS,
+                    credentials.map(AlgorithmCredentialService.AlgorithmCredentials::username).orElse(null),
+                    credentials.map(AlgorithmCredentialService.AlgorithmCredentials::password).orElse(null));
 
             log.info("Algorithm service health check {} -> {}", algorithm.getHealthUrl(), response.statusCode());
 

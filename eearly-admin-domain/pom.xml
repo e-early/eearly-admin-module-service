@@ -4,7 +4,7 @@
   <parent>
     <groupId>si.result.eearly</groupId>
     <artifactId>eearly-admin</artifactId>
-    <version>0.11.4-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>eearly-admin-domain</artifactId>
@@ -26,6 +26,12 @@
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
 
+    <!-- Mail -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+
     <!-- Utils -->
     <dependency>
       <groupId>com.google.guava</groupId>
@@ -43,6 +49,12 @@
       <groupId>com.networknt</groupId>
       <artifactId>json-schema-validator</artifactId>
       <version>1.5.9</version>
+    </dependency>
+
+    <!-- QR code image generation (Apache License 2.0) -->
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
     </dependency>
 
 

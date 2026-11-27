@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import si.result.project.eearly.dto.algorithm.AlgorithmDTO;
 import si.result.project.eearly.dto.algorithm.AlgorithmStatusDTO;
@@ -15,6 +16,7 @@ import si.result.project.eearly.model.algorithm.AlgorithmPricingModelType;
 import si.result.project.eearly.model.algorithm.AlgorithmStatusType;
 import si.result.project.eearly.model.algorithm.command.CreateAlgorithmCommand;
 import si.result.project.eearly.model.algorithm.command.UpdateAlgorithmCommand;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.spring.boot.bricks.exception.DomainException;
@@ -27,17 +29,25 @@ public interface AlgorithmMapper {
 
     ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    @Mapping(target = "authPasswordSet",
+            expression = "java(si.result.project.eearly.port.algorithm.AlgorithmCredentialService.hasPassword(algorithm))")
     AlgorithmDTO toDTO(final Algorithm algorithm);
 
+    // The stored password is ciphertext and never goes into a response.
+    @Mapping(target = "authPassword", ignore = true)
+    @Mapping(target = "authPasswordSet",
+            expression = "java(si.result.project.eearly.port.algorithm.AlgorithmCredentialService.hasPassword(algorithm))")
     AlgorithmUpsertDTO toUpsertDTO(final Algorithm algorithm);
 
     AlgorithmStatusDTO toStatusDTO(final Algorithm algorithm);
 
     CreateAlgorithmCommand toCreateCommand(final AlgorithmUpsertDTO dto,
-                                           final List<Patient> patients, final List<Measurement> measurements);
+                                           final List<Patient> patients, final List<Measurement> measurements,
+                                           final List<HealthCondition> healthConditions);
 
     UpdateAlgorithmCommand toUpdateCommand(final AlgorithmUpsertDTO dto,
-                                           final List<Patient> patients, final List<Measurement> measurements);
+                                           final List<Patient> patients, final List<Measurement> measurements,
+                                           final List<HealthCondition> healthConditions);
 
     default void validateJson(String json, DomainExceptionCode code) {
         if (json == null) return;

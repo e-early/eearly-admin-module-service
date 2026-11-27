@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,8 +28,11 @@ public class CreatePatientCommand {
     private final String country;
     private final String email;
     private final String phoneNumber;
+    /** ISO 639-1 code; null keeps the current language (the default on create). */
+    private final String language;
 
     private final List<Caretaker> caretakers;
     private final List<Measurement> measurements;
+    private final List<HealthCondition> healthConditions;
     private final List<Algorithm> algorithms;
 }

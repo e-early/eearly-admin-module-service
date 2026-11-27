@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import si.result.project.eearly.exception.DomainExceptionCode;
+import si.result.project.eearly.model.caretaker.Caretaker;
 import si.result.project.eearly.model.gender.GenderType;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.project.eearly.model.patient.command.CreatePatientCommand;
@@ -206,6 +207,112 @@ class PatientServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("Change language")
+    class ChangeLanguageTest {
+
+        @Test
+        @DisplayName("Should save the language the patient picked")
+        void changeLanguage_ShouldSaveTheLanguage() {
+            UUID keycloakId = UUID.randomUUID();
+            when(patientRepository.findByKeycloakId(keycloakId)).thenReturn(Optional.of(testPatient));
+            when(patientRepository.save(testPatient)).thenReturn(testPatient);
+
+            Patient result = patientService.changeLanguage(keycloakId, "en");
+
+            assertEquals("en", result.getLanguage());
+            verify(patientRepository).save(testPatient);
+        }
+
+        @Test
+        @DisplayName("Should throw PATIENT_NOT_FOUND for an unknown Keycloak ID")
+        void changeLanguage_WhenPatientNotFound_ShouldThrow() {
+            UUID keycloakId = UUID.randomUUID();
+            when(patientRepository.findByKeycloakId(keycloakId)).thenReturn(Optional.empty());
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientService.changeLanguage(keycloakId, "en"));
+
+            assertEquals(DomainExceptionCode.PATIENT_NOT_FOUND, exception.getCode());
+            verify(patientRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Should reject a missing or unsupported language without looking up the patient")
+        void changeLanguage_WithUnsupportedLanguage_ShouldThrow() {
+            for (String language : new String[]{null, "", "de"}) {
+                DomainException exception = assertThrows(DomainException.class,
+                    () -> patientService.changeLanguage(UUID.randomUUID(), language));
+
+                assertEquals(DomainExceptionCode.PATIENT_LANGUAGE_UNSUPPORTED, exception.getCode());
+            }
+            verifyNoInteractions(patientRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("Find by ID for a caretaker")
+    class FindByIdForCaretakerTest {
+
+        private Patient patientOf(final UUID... caretakerIds) {
+            final Patient patient = mock(Patient.class);
+            final List<Caretaker> caretakers = new java.util.ArrayList<>();
+            for (UUID caretakerId : caretakerIds) {
+                final Caretaker caretaker = mock(Caretaker.class);
+                when(caretaker.getId()).thenReturn(caretakerId);
+                caretakers.add(caretaker);
+            }
+            when(patient.getCaretakers()).thenReturn(caretakers);
+            return patient;
+        }
+
+        @Test
+        @DisplayName("Should return the patient when assigned to the caretaker")
+        void findByIdForCaretaker_WhenAssigned_ShouldReturnPatient() {
+            UUID caretakerId = UUID.randomUUID();
+            Patient patient = patientOf(UUID.randomUUID(), caretakerId);
+            when(patientRepository.findById(testId)).thenReturn(Optional.of(patient));
+
+            assertSame(patient, patientService.findByIdForCaretaker(testId, caretakerId));
+        }
+
+        @Test
+        @DisplayName("Should throw PATIENT_NOT_FOUND when assigned to other caretakers only")
+        void findByIdForCaretaker_WhenNotAssigned_ShouldThrowPatientNotFound() {
+            Patient patient = patientOf(UUID.randomUUID());
+            when(patientRepository.findById(testId)).thenReturn(Optional.of(patient));
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientService.findByIdForCaretaker(testId, UUID.randomUUID()));
+
+            assertEquals(DomainExceptionCode.PATIENT_NOT_FOUND, exception.getCode());
+        }
+
+        @Test
+        @DisplayName("Should throw PATIENT_NOT_FOUND for a patient without caretakers")
+        void findByIdForCaretaker_WhenNoCaretakers_ShouldThrowPatientNotFound() {
+            Patient patient = mock(Patient.class);
+            when(patient.getCaretakers()).thenReturn(null);
+            when(patientRepository.findById(testId)).thenReturn(Optional.of(patient));
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientService.findByIdForCaretaker(testId, UUID.randomUUID()));
+
+            assertEquals(DomainExceptionCode.PATIENT_NOT_FOUND, exception.getCode());
+        }
+
+        @Test
+        @DisplayName("Should answer an unknown patient the same way as another caretaker's patient")
+        void findByIdForCaretaker_WhenPatientUnknown_ShouldThrowPatientNotFound() {
+            when(patientRepository.findById(testId)).thenReturn(Optional.empty());
+
+            DomainException exception = assertThrows(DomainException.class,
+                () -> patientService.findByIdForCaretaker(testId, UUID.randomUUID()));
+
+            assertEquals(DomainExceptionCode.PATIENT_NOT_FOUND, exception.getCode());
+        }
+    }
+
     private Patient createTestPatient() {
         return Patient.create(createTestCreateCommand());
     }
@@ -214,8 +321,8 @@ class PatientServiceTest {
         return new CreatePatientCommand(
             "John", "Doe", LocalDate.of(1990, 1, 1), GenderType.MALE,
             "123456789", "Test Street", "Test City", "Test State", 1000,
-            "Test Country", "john.doe@test.com", "+1234567890",
-            null, null, null, null, null
+            "Test Country", "john.doe@test.com", "+1234567890", null,
+            null, null, null, null
         );
     }
 
@@ -223,8 +330,8 @@ class PatientServiceTest {
         return new UpdatePatientCommand(
             testId, "Jane", "Smith", LocalDate.of(1995, 5, 15), GenderType.FEMALE,
             "987654321", "Updated Street", "Updated City", "Updated State", 2000,
-            "Updated Country", "jane.smith@test.com", "+0987654321",
-            null, null, null, null, null
+            "Updated Country", "jane.smith@test.com", "+0987654321", null,
+            null, null, null, null
         );
     }
 }

@@ -2,6 +2,7 @@ package si.result.project.eearly.dto.patient;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import si.result.project.eearly.dto.algorithm.AlgorithmLiteDTO;
+import si.result.project.eearly.dto.healthcondition.HealthConditionLiteDTO;
 import si.result.project.eearly.dto.measurement.MeasurementLiteDTO;
 import si.result.project.eearly.model.gender.GenderType;
 
@@ -50,7 +51,12 @@ public record PatientDTO(
     @Schema(example = "1234567890")
     String phoneNumber,
 
+    @Schema(example = "sl", allowableValues = {"sl", "en"})
+    String language,
+
     List<MeasurementLiteDTO> measurements,
+
+    List<HealthConditionLiteDTO> healthConditions,
 
     List<AlgorithmLiteDTO> algorithms
 ) {}

@@ -47,6 +47,11 @@ public class Analysis extends Auditable {
     @Column(name = "detected")
     private Boolean detected;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcType(PostgreSQLEnumJdbcType.class)
+    @Column(name = "trigger_type", nullable = false)
+    private AnalysisTriggerType triggerType;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_patient")
     private Patient patient;
@@ -78,6 +83,7 @@ public class Analysis extends Auditable {
         analysis.setAlgorithm(command.getAlgorithm());
         analysis.setInputParameters(command.getInputParameters());
         analysis.setChartDisplayOptions(command.getChartDisplayOptions());
+        analysis.setTriggerType(command.getTriggerType());
         return analysis;
     }
 
@@ -106,6 +112,11 @@ public class Analysis extends Auditable {
 
     private void setDetected(final Boolean detected) {
         this.detected = detected;
+    }
+
+    private void setTriggerType(final AnalysisTriggerType triggerType) {
+        Condition.checkNotNull(triggerType, DomainExceptionCode.ANALYSIS_TRIGGER_TYPE_NULL);
+        this.triggerType = triggerType;
     }
 
     private void setPatient(final Patient patient) {

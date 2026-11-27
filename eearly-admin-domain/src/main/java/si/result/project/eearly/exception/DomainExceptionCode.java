@@ -33,6 +33,23 @@ public enum DomainExceptionCode implements ExceptionCode {
   PATIENT_EMAIL_FOUND("Patient email is already in the system", ExceptionReason.ILLEGAL_ARGUMENT),
   PATIENT_PHONE_NUMBER_NULL("Patient city is null", ExceptionReason.ILLEGAL_ARGUMENT),
   PATIENT_PHONE_NUMBER_TOO_LONG("Patient city is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  PATIENT_LANGUAGE_UNSUPPORTED("Patient language is not supported", ExceptionReason.ILLEGAL_ARGUMENT),
+
+  QR_CODE_NOT_FOUND("QR code not found", ExceptionReason.ENTITY_NOT_FOUND),
+  QR_CODE_FOUND("QR code found", ExceptionReason.ENTITY_NOT_FOUND),
+  QR_CODE_TOKEN_NULL("QR code token is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_URL_NULL("QR code url is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_TOKEN_EXPIRATION_DATE_NULL("QR code token expiration date is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_MOBILE_APP_CONFIGURED_NULL("QR code mobile app configured is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_STATUS_NULL("QR code status is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_PATIENT_NULL("QR code patient is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_CARETAKER_NULL("QR code caretaker is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_GENERATION_FAILED("QR code generation failed", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_ONBOARDING_URL_NULL("QR code onboarding url is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_ONBOARDING_URL_BLANK("QR code onboarding url is blank", ExceptionReason.ILLEGAL_ARGUMENT),
+  QR_CODE_ONBOARDING_URL_INVALID("Onboarding link issued by the mobile service is not valid", ExceptionReason.RUNTIME),
+  QR_CODE_NOT_ACTIVE("QR code is not active or has expired", ExceptionReason.ILLEGAL_ARGUMENT),
+  PATIENT_NOT_ONBOARDED("Patient has no mobile user yet", ExceptionReason.ILLEGAL_ARGUMENT),
 
   CARETAKER_ID_NULL("Caretaker ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_NOT_FOUND("Caretaker not found", ExceptionReason.ENTITY_NOT_FOUND),
@@ -42,6 +59,18 @@ public enum DomainExceptionCode implements ExceptionCode {
   CARETAKER_LASTNAME_TOO_LONG("Caretaker last name is too long", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_EMAIL_NULL("Caretaker email is null", ExceptionReason.ILLEGAL_ARGUMENT),
   CARETAKER_LANGUAGE_NULL("Caretaker language is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  CARETAKER_ORGANIZATION_NULL("Caretaker organization is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  CARETAKER_DEPARTMENT_NULL("Caretaker department is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
+  ORGANIZATION_NOT_FOUND("Organization not found", ExceptionReason.ENTITY_NOT_FOUND),
+  ORGANIZATION_NAME_NULL("Organization name is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
+  DEPARTMENT_NOT_FOUND("Department not found", ExceptionReason.ENTITY_NOT_FOUND),
+  DEPARTMENT_NAME_NULL("Department name is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  DEPARTMENT_ORGANIZATION_NOT_FOUND("Department organization not found", ExceptionReason.ENTITY_NOT_FOUND),
+
+  HEALTH_CONDITION_NOT_FOUND("Health condition not found", ExceptionReason.ENTITY_NOT_FOUND),
+  HEALTH_CONDITION_NAME_NULL("Condition name is null", ExceptionReason.ILLEGAL_ARGUMENT),
 
   MEASUREMENT_NOT_FOUND("Measurement not found", ExceptionReason.ENTITY_NOT_FOUND),
   MEASUREMENT_NAME_NULL("Measurement name is null", ExceptionReason.ILLEGAL_ARGUMENT),
@@ -52,6 +81,7 @@ public enum DomainExceptionCode implements ExceptionCode {
   ANALYSIS_NOT_FOUND("Analysis not found", ExceptionReason.ENTITY_NOT_FOUND),
   ANALYSIS_NAME_NULL("Analysis name is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_STATE_NULL("Analysis state is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  ANALYSIS_TRIGGER_TYPE_NULL("Analysis trigger type is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_PATIENT_NULL("Analysis patient is null", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_RESULT_DATA_MISSING("Analysis has no result data yet", ExceptionReason.ILLEGAL_STATE),
   ANALYSIS_DETECTION_NOT_FOUND("Detection not found for this analysis", ExceptionReason.ENTITY_NOT_FOUND),
@@ -76,11 +106,22 @@ public enum DomainExceptionCode implements ExceptionCode {
 
   ALGORITHM_EXECUTION_NOT_FOUND("Algorithm execution not found", ExceptionReason.ENTITY_NOT_FOUND),
   ALGORITHM_EXECUTION_INVALID_INPUT_PARAMETERS("Algorithm execution input parameters are invalid", ExceptionReason.ILLEGAL_ARGUMENT),
+  ALGORITHM_EXECUTION_MEASUREMENT_DATA_MISSING("No measurement data found for the selected time window", ExceptionReason.ILLEGAL_STATE),
+  ALGORITHM_EXECUTION_UNSUPPORTED_MEASUREMENT_TYPE("Measurement type is not supported for this execution", ExceptionReason.ILLEGAL_ARGUMENT),
   INVALID_EXECUTION_STATUS_TRANSITION("Invalid execution status transition", ExceptionReason.ILLEGAL_ARGUMENT),
 
   ALGORITHM_INPUT_PREPARATION_FAILED("Failed to prepare algorithm input payload", ExceptionReason.RUNTIME),
+  ALGORITHM_CREDENTIALS_ENCRYPTION_NOT_CONFIGURED(
+      "Algorithm credentials cannot be stored: no encryption key is configured (algorithm.credentials.encryption-key)",
+      ExceptionReason.ILLEGAL_STATE),
+  ALGORITHM_CREDENTIALS_UNAVAILABLE(
+      "Stored algorithm credentials cannot be used: the encryption key is missing or does not match",
+      ExceptionReason.RUNTIME),
+  ALGORITHM_CREDENTIALS_PASSWORD_TOO_LONG("Algorithm password is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  CALLBACK_TOKEN_INVALID("Callback token is not valid", ExceptionReason.UNAUTHORIZED),
 
   MOBILE_SERVICE_REQUEST_FAILED("Request to Mobile Service failed", ExceptionReason.RUNTIME),
+  MOBILE_USER_NOT_FOUND("User not found in Mobile Service", ExceptionReason.ENTITY_NOT_FOUND),
 
   ANALYSIS_FEEDBACK_PARAMETER_MISSING("Analysis feedback parameter is missing", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_FEEDBACK_PARAMETER_INVALID("Analysis feedback parameter is invalid", ExceptionReason.ILLEGAL_ARGUMENT),
@@ -88,7 +129,21 @@ public enum DomainExceptionCode implements ExceptionCode {
   ANALYSIS_FEEDBACK_END_DATE_IN_FUTURE("Analysis feedback end date is in the future", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_FEEDBACK_DATE_RANGE_INCOMPLETE("Analysis feedback requires both startDate and endDate when either is provided", ExceptionReason.ILLEGAL_ARGUMENT),
 
-  PATIENT_ID_NULL("Patient ID is null", ExceptionReason.ILLEGAL_ARGUMENT);
+  PATIENT_ID_NULL("Patient ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
+  NOTIFICATION_ID_NULL("Notification ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_NOT_FOUND("Notification not found", ExceptionReason.ENTITY_NOT_FOUND),
+  NOTIFICATION_TYPE_NULL("Notification type is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_MESSAGE_NULL("Notification message is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_MESSAGE_TOO_LONG("Notification message is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_ANALYSIS_HANDLING_FAILED("Failed to handle analysis notification event", ExceptionReason.RUNTIME),
+  NOTIFICATION_ANALYSIS_EXECUTION_HANDLING_FAILED(
+      "Failed to handle algorithm execution notification event", ExceptionReason.RUNTIME),
+  NOTIFICATION_PATIENT_SYNC_FAILED("Failed to handle patient sync notification event", ExceptionReason.RUNTIME),
+  EMAIL_SEND_FAILED("Email send failed", ExceptionReason.RUNTIME),
+  EMAIL_TEMPLATE_NOT_FOUND("Email template not found", ExceptionReason.ENTITY_NOT_FOUND),
+  EMAIL_TEMPLATE_LOAD_FAILED("Email template load failed", ExceptionReason.RUNTIME),
+  REFERENCE_ID_NULL("Reference ID is null", ExceptionReason.ILLEGAL_ARGUMENT);
 
 
   private final String message;

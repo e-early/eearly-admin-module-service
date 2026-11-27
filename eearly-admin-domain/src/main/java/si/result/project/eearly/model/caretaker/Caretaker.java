@@ -8,6 +8,8 @@ import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.auditable.Auditable;
 import si.result.project.eearly.model.caretaker.command.CreateCaretakerCommand;
 import si.result.project.eearly.model.caretaker.command.UpdateCaretakerCommand;
+import si.result.project.eearly.model.department.Department;
+import si.result.project.eearly.model.organization.Organization;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.spring.boot.bricks.validation.Condition;
 
@@ -39,6 +41,14 @@ public class Caretaker extends Auditable {
     @Column(name = "language", length = 3)
     private String language;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_organization")
+    private Organization organization;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_department")
+    private Department department;
+
     @ManyToMany(fetch = FetchType.LAZY, mappedBy = "caretakers")
     private List<Patient> patients;
 
@@ -51,6 +61,8 @@ public class Caretaker extends Auditable {
         caretaker.setLastName(command.getLastName());
         caretaker.setEmail(command.getEmail());
         caretaker.setLanguage(command.getLanguage());
+        caretaker.setOrganization(command.getOrganization());
+        caretaker.setDepartment(command.getDepartment());
         return caretaker;
     }
 
@@ -59,6 +71,8 @@ public class Caretaker extends Auditable {
         setLastName(command.getLastName());
         setEmail(command.getEmail());
         setLanguage(command.getLanguage());
+        // The organization is set when the caretaker is created and is not changed here.
+        setDepartment(command.getDepartment());
     }
 
     private void setKeycloakId(final UUID keycloakId) {
@@ -85,6 +99,16 @@ public class Caretaker extends Auditable {
     private void setLanguage(final String language) {
         Condition.checkNotNull(language, DomainExceptionCode.CARETAKER_LANGUAGE_NULL);
         this.language = language;
+    }
+
+    private void setOrganization(final Organization organization) {
+        Condition.checkNotNull(organization, DomainExceptionCode.CARETAKER_ORGANIZATION_NULL);
+        this.organization = organization;
+    }
+
+    private void setDepartment(final Department department) {
+        Condition.checkNotNull(department, DomainExceptionCode.CARETAKER_DEPARTMENT_NULL);
+        this.department = department;
     }
 
     @Override

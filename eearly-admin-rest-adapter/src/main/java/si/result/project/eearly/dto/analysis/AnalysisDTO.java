@@ -2,9 +2,11 @@ package si.result.project.eearly.dto.analysis;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import si.result.project.eearly.dto.healthcondition.HealthConditionLiteDTO;
 import si.result.project.eearly.dto.measurement.MeasurementLiteDTO;
 import si.result.project.eearly.dto.patient.PatientLiteDTO;
 import si.result.project.eearly.model.analysis.AnalysisState;
+import si.result.project.eearly.model.analysis.AnalysisTriggerType;
 import si.result.project.eearly.model.analysis.FeedbackState;
 
 import java.util.List;
@@ -33,6 +35,9 @@ public record AnalysisDTO(
     @Schema()
     List<MeasurementLiteDTO> measurements,
 
+    @Schema()
+    List<HealthConditionLiteDTO> healthConditions,
+
     @Schema(description = "Input selection intervals used for this analysis")
     List<AnalysisSelectionDTO> inputParameters,
 
@@ -44,6 +49,9 @@ public record AnalysisDTO(
     List<AnalysisDetectionDTO> caretakerFeedbackDetections,
 
     @Schema(description = "Chart display parameters")
-    ChartDisplayOptionsDTO chartDisplayOptions
+    ChartDisplayOptionsDTO chartDisplayOptions,
+
+    @Schema(example = "MANUAL", description = "How the analysis was created; read-only")
+    AnalysisTriggerType triggerType
 
 ) {}

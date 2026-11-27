@@ -4,7 +4,7 @@
   <parent>
     <groupId>si.result.eearly</groupId>
     <artifactId>eearly-admin</artifactId>
-    <version>0.11.4-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>eearly-admin-service</artifactId>
@@ -66,6 +66,24 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Characterization tests: PostgreSQL in Docker for the rest-filter semantics test -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Embedded SMTP server for the email integration test (Apache License 2.0) -->
+    <dependency>
+      <groupId>com.icegreen</groupId>
+      <artifactId>greenmail-junit5</artifactId>
+      <version>2.1.3</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

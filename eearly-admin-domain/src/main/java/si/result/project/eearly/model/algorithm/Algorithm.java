@@ -12,6 +12,7 @@ import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.algorithm.command.CreateAlgorithmCommand;
 import si.result.project.eearly.model.algorithm.command.UpdateAlgorithmCommand;
 import si.result.project.eearly.model.auditable.Auditable;
+import si.result.project.eearly.model.healthcondition.HealthCondition;
 import si.result.project.eearly.model.measurement.Measurement;
 import si.result.project.eearly.model.patient.Patient;
 import si.result.spring.boot.bricks.exception.DomainException;
@@ -110,6 +111,14 @@ public class Algorithm extends Auditable {
     @Column(name = "license_type", length = 100)
     private String licenseType;
 
+    // --- Credentials for the algorithm's own service endpoint ---
+    @Column(name = "auth_username")
+    private String authUsername;
+
+    /** The AES-GCM ciphertext of the password, never the password itself (see AlgorithmCredentialCipher). */
+    @Column(name = "auth_password")
+    private String authPassword;
+
     @ManyToMany(fetch = FetchType.LAZY, mappedBy = "algorithms")
     private List<Patient> patients;
 
@@ -120,6 +129,14 @@ public class Algorithm extends Auditable {
             inverseJoinColumns = @JoinColumn(name = "measurement_id")
     )
     private List<Measurement> measurements;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "t_health_condition_algorithm",
+            joinColumns = @JoinColumn(name = "algorithm_id"),
+            inverseJoinColumns = @JoinColumn(name = "condition_id")
+    )
+    private List<HealthCondition> healthConditions;
 
     public static Algorithm create(CreateAlgorithmCommand command) {
         return Algorithm.builder()
@@ -145,9 +162,12 @@ public class Algorithm extends Auditable {
                 .currency(command.currency())
                 .billingCode(command.billingCode())
                 .licenseType(command.licenseType())
+                .authUsername(command.authUsername())
+                .authPassword(command.authPassword())
 
                 .patients(command.patients())
                 .measurements(command.measurements())
+                .healthConditions(command.healthConditions())
                 .build();
     }
 
@@ -173,9 +193,12 @@ public class Algorithm extends Auditable {
         setCurrency(command.currency());
         setBillingCode(command.billingCode());
         setLicenseType(command.licenseType());
+        setAuthUsername(command.authUsername());
+        setAuthPassword(command.authPassword());
 
         setPatients(command.patients());
         setMeasurements(command.measurements());
+        setHealthConditions(command.healthConditions());
     }
 
     public String getExecutionUrl() {

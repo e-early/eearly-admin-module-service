@@ -1,6 +1,7 @@
 package si.result.project.eearly.dto.algorithm;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import si.result.project.eearly.dto.common.StringOrJsonDeserializer;
 
@@ -80,6 +81,35 @@ public record AlgorithmUpsertDTO(
     List<UUID> patientList,
 
     @Schema
-    List<UUID> measurementList
+    List<UUID> measurementList,
+
+    @Schema
+    List<UUID> healthConditionList
+    ,
+
+    // --- Credentials for the algorithm's own service endpoint ---
+    @Schema(example = "sample-user-42",
+            description = "Optional Basic Auth username for this algorithm's service endpoint. Omit it to leave it "
+                    + "unchanged, send an empty string to remove the credentials.")
+    String authUsername,
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Schema(accessMode = Schema.AccessMode.WRITE_ONLY,
+            description = "Basic Auth password for this algorithm's service endpoint. Write-only: it is stored "
+                    + "encrypted and never returned. Omit it to leave it unchanged, send an empty string to remove "
+                    + "it. Needs the server's algorithm.credentials.encryption-key.")
+    String authPassword,
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY, description = "Whether a password is stored.")
+    // Not named has...: MapStruct would take a hasXxx() accessor for a presence check of the xxx property.
+    Boolean authPasswordSet
 ) {
+
+    /** Without the password, which must never reach a log. */
+    @Override
+    public String toString() {
+        return "AlgorithmUpsertDTO[id=" + id + ", name=" + name + ", authUsername=" + authUsername
+                + ", authPassword=" + (authPassword == null ? "null" : "***") + "]";
+    }
 }

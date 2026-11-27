@@ -5,16 +5,20 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.HttpStatus;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import si.result.project.eearly.config.algorithm.AlgorithmApiProperties;
 import si.result.project.eearly.config.algorithm.AlgorithmHttpClient;
 import si.result.project.eearly.dto.analysis.AnalysisDetectionDTO;
 import si.result.project.eearly.model.analysis.AnalysisState;
-import si.result.project.eearly.model.analysis.AnalysisSelection;
+import si.result.project.eearly.model.algorithm.Algorithm;
 import si.result.project.eearly.model.algorithmexecution.AlgorithmExecution;
 import si.result.project.eearly.model.algorithmexecution.AlgorithmExecutionStatus;
-import si.result.project.eearly.port.algorithmexecution.AlgorithmDataPreparationService;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService;
+import si.result.project.eearly.port.algorithm.AlgorithmCredentialService.AlgorithmCredentials;
+import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionPayloadBuilder;
 import si.result.project.eearly.port.algorithmexecution.AlgorithmExecutionService;
 import si.result.project.eearly.facade.analysis.AnalysisServiceFacade;
 import si.result.project.eearly.model.analysis.DetectionBoxSources;
@@ -26,15 +30,18 @@ import si.result.spring.boot.bricks.exception.DomainException;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Component
+@Profile("!" + AlgorithmSimulationService.PROFILE)
 @RequiredArgsConstructor
 public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService {
 
     private final AlgorithmExecutionService algorithmExecutionService;
-    private final AlgorithmDataPreparationService algorithmDataPreparationService;
+    private final AlgorithmExecutionPayloadBuilder algorithmExecutionPayloadBuilder;
+    private final AlgorithmCredentialService algorithmCredentialService;
     private final AnalysisService analysisService;
     private final AnalysisServiceFacade analysisServiceFacade;
     private final AlgorithmApiProperties algorithmApiProperties;
@@ -60,7 +67,8 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
             final java.net.http.HttpResponse<String> response = sendJsonRequest(
                     "POST",
                     executionContext.getAlgorithm().getExecutionUrl(),
-                    buildRequestBody(executionContext)
+                    buildRequestBody(executionContext),
+                    executionContext.getAlgorithm()
             );
 
             if (!isSuccessful(response.statusCode())) {
@@ -77,20 +85,51 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
                 return;
             }
 
-            handleSuccessfulResult(executionContext, responseBody);
-        } catch (Exception e) {
-            log.error("Remote execution failed for AlgorithmExecution {}",
-                    algorithmExecution.getId(), e);
-            if (algorithmExecution.getAnalysis() != null && algorithmExecution.getAnalysis().getId() != null) {
-                try {
-                    analysisService.updateState(algorithmExecution.getAnalysis().getId(), AnalysisState.ERROR);
-                } catch (Exception analysisFailure) {
-                    log.error("Failed to persist ERROR state for Analysis {}",
-                            algorithmExecution.getAnalysis().getId(), analysisFailure);
-                }
+            if (response.statusCode() == HttpStatus.ACCEPTED.value()) {
+                handleAccepted(algorithmExecution);
+                return;
             }
-            markFailed(algorithmExecution.getId(), e.getMessage());
+
+            handleSuccessfulResult(executionContext, responseBody);
+        } catch (InterruptedException e) {
+            handleRunFailure(algorithmExecution, e);
+            // Restored after the failure is persisted, so the database calls above are not interrupted.
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            handleRunFailure(algorithmExecution, e);
         }
+    }
+
+    /**
+     * 202 Accepted without a task id and without an inline result: a webhook-style provider that reports the real
+     * result later by calling back to {@code POST /api/v1/analyses/{id}/result}. The execution stays RUNNING (it is
+     * already) until the callback completes it. That only works while callback tokens are enabled, because only
+     * then does the provider get a callback URL; otherwise the warning says so, and the execution can only be
+     * ended by a result posted with a JWT, or failed by the stuck-execution sweep.
+     */
+    private void handleAccepted(final AlgorithmExecution algorithmExecution) {
+        if (algorithmExecutionPayloadBuilder.callbackUrlsEnabled()) {
+            log.info("AlgorithmExecution {} was accepted; its result is expected by callback", algorithmExecution.getId());
+        } else {
+            log.warn("AlgorithmExecution {} was accepted for asynchronous processing, but callback tokens are not "
+                    + "enabled (algorithm.callback.token-secret), so the provider was given no callback URL and "
+                    + "cannot report its result; the execution stays RUNNING until it is failed by the "
+                    + "stuck-execution sweep", algorithmExecution.getId());
+        }
+    }
+
+    private void handleRunFailure(final AlgorithmExecution algorithmExecution, final Exception e) {
+        log.error("Remote execution failed for AlgorithmExecution {}",
+                algorithmExecution.getId(), e);
+        if (algorithmExecution.getAnalysis() != null && algorithmExecution.getAnalysis().getId() != null) {
+            try {
+                analysisService.updateState(algorithmExecution.getAnalysis().getId(), AnalysisState.ERROR);
+            } catch (Exception analysisFailure) {
+                log.error("Failed to persist ERROR state for Analysis {}",
+                        algorithmExecution.getAnalysis().getId(), analysisFailure);
+            }
+        }
+        markFailed(algorithmExecution.getId(), e.getMessage());
     }
 
     @Override
@@ -101,15 +140,26 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
             try {
                 sendJsonRequest("DELETE",
                         algorithmExecution.getAlgorithm().getCancellationUrl(externalRequestId),
-                        null);
+                        null,
+                        algorithmExecution.getAlgorithm());
+            } catch (InterruptedException e) {
+                logCancellationFailure(algorithmExecution, e);
+                algorithmExecutionService.markCancelled(algorithmExecution.getId());
+                // Restored after cancelling locally, so the database call is not interrupted.
+                Thread.currentThread().interrupt();
+                return;
             } catch (Exception e) {
-                log.warn(
-                        "Remote cancellation failed for AlgorithmExecution {}. Cancelling locally.",
-                        algorithmExecution.getId(), e);
+                logCancellationFailure(algorithmExecution, e);
             }
         }
 
         algorithmExecutionService.markCancelled(algorithmExecution.getId());
+    }
+
+    private void logCancellationFailure(final AlgorithmExecution algorithmExecution, final Exception e) {
+        log.warn(
+                "Remote cancellation failed for AlgorithmExecution {}. Cancelling locally.",
+                algorithmExecution.getId(), e);
     }
 
     @Override
@@ -123,7 +173,8 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
             final java.net.http.HttpResponse<String> response = sendJsonRequest(
                     "GET",
                     algorithmExecution.getAlgorithm().getHealthUrl(),
-                    null
+                    null,
+                    algorithmExecution.getAlgorithm()
             );
 
             if (!isSuccessful(response.statusCode())) {
@@ -141,32 +192,16 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
     }
 
     private java.net.http.HttpResponse<String> sendJsonRequest(
-            String method, String url, String body) throws IOException, InterruptedException {
-        return algorithmHttpClient.send(method, url, body, algorithmApiProperties.getDefaultTimeoutSeconds());
+            String method, String url, String body, Algorithm algorithm) throws IOException, InterruptedException {
+        // The algorithm's own credentials when it has any, else the global ones of the client.
+        final Optional<AlgorithmCredentials> credentials = algorithmCredentialService.resolve(algorithm);
+        return algorithmHttpClient.send(method, url, body, algorithmApiProperties.getDefaultTimeoutSeconds(),
+                credentials.map(AlgorithmCredentials::username).orElse(null),
+                credentials.map(AlgorithmCredentials::password).orElse(null));
     }
 
     private String buildRequestBody(final AlgorithmExecution algorithmExecution) {
-        if (algorithmExecution.getAnalysis() == null) {
-            return defaultBody(algorithmExecution.getInputParameters());
-        }
-
-        final List<AnalysisSelection> selections = algorithmExecution.getInputSelections();
-        if (selections.isEmpty()) {
-            return defaultBody(algorithmExecution.getInputParameters());
-        }
-
-        return algorithmDataPreparationService.prepareInputData(
-                algorithmExecution.getPatient(),
-                algorithmExecution.getAlgorithm(),
-                selections,
-                algorithmExecution.getAnalysis().getId(),
-                algorithmExecution.getAlgorithm().getRunnerConfig(),
-                null
-        );
-    }
-
-    private String defaultBody(final String inputParameters) {
-        return inputParameters != null ? inputParameters : "{}";
+        return algorithmExecutionPayloadBuilder.buildPayload(algorithmExecution);
     }
 
     private void pollAsyncResult(final AlgorithmExecution executionContext, final String taskId)
@@ -177,7 +212,8 @@ public class HttpAlgorithmExecutionAdapter implements AlgorithmContainerService 
             final java.net.http.HttpResponse<String> response = sendJsonRequest(
                     "GET",
                     executionContext.getAlgorithm().getResultUrl(taskId),
-                    null
+                    null,
+                    executionContext.getAlgorithm()
             );
 
             if (!isSuccessful(response.statusCode())) {

@@ -32,6 +32,13 @@ spring:
           # See: https://github.com/result-si/eearly-keycloak for setup
           jwk-set-uri: ${JWK_SET_URI:http://localhost:8080/realms/eearly/protocol/openid-connect/certs}
 
+  # Local SMTP server that catches e-mail, such as MailHog or Mailpit (SMTP on 1025)
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
   grpc:
     client:
       channels:
@@ -46,6 +53,13 @@ logging:
 
 service:
   domain: ${SERVICE_DOMAIN_URL:http://localhost:9000}
+
+email:
+  from: ${EMAIL_FROM:noreply@example.org}
+
+qrcode:
+  # The local mobile service answers with http links.
+  allow-http-onboarding-url: ${QR_CODE_ALLOW_HTTP_ONBOARDING_URL:true}
 
 mobile:
   service:
@@ -67,3 +81,33 @@ algorithm:
       username: ${ALGORITHM_BASIC_AUTH_USERNAME:}
       password: ${ALGORITHM_BASIC_AUTH_PASSWORD:}
     verify-ssl: ${BENTOML_VERIFY_SSL:true}
+
+  # Opt-in support for webhook-style algorithm providers, which answer 202 and report the result later by calling
+  # back to POST /api/v1/analyses/{id}/result. Without a secret there are no callback tokens and no callback URL,
+  # and the result endpoints accept a Keycloak JWT only. Generate a secret with: openssl rand -base64 48
+  callback:
+    token-secret: ${ALGORITHM_CALLBACK_TOKEN_SECRET:}
+    # ISO-8601 duration a callback token is accepted for
+    token-ttl: ${ALGORITHM_CALLBACK_TOKEN_TTL:PT15M}
+
+  # Per-algorithm Basic Auth passwords are stored encrypted (AES-256-GCM). Base64 of 32 bytes, generate with:
+  # openssl rand -base64 32. Without a key no algorithm password can be set or used.
+  credentials:
+    encryption-key: ${ALGORITHM_CREDENTIALS_ENCRYPTION_KEY:}
+
+  # Fails executions that stay SUBMITTED or RUNNING without a result. The timeout must be longer than
+  # algorithm.api.default-timeout-seconds (BENTOML_TIMEOUT), which is checked at startup.
+  stuck-execution-sweep:
+    enabled: ${ALGORITHM_STUCK_SWEEP_ENABLED:true}
+    poll-interval-ms: ${ALGORITHM_STUCK_SWEEP_POLL_INTERVAL_MS:300000}
+    timeout-minutes: ${ALGORITHM_STUCK_SWEEP_TIMEOUT_MINUTES:90}
+
+admin:
+  keycloak:
+    # Client whose client roles authorize calls to this service (resource_access.<client id>.roles).
+    ui-client-id: ${ADMIN_KEYCLOAK_UI_CLIENT_ID:eearly-admin-ui}
+
+patient:
+  demographics-sync:
+    # Send every patient's demographics to the mobile backend once, after startup (backfill and retry).
+    on-startup: ${PATIENT_DEMOGRAPHICS_SYNC_ON_STARTUP:true}

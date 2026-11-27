@@ -55,6 +55,25 @@ spring:
         jwt:
           jwk-set-uri: ${JWK_SET_URI}
 
+  # SMTP server for outgoing e-mail. Failed sends are logged and never fail a request, so an unreachable or
+  # unconfigured server only means no e-mail.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:25}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          ssl:
+            enable: ${MAIL_SMTP_SSL:false}
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${MAIL_TIMEOUT_MS:60000}
+          writetimeout: ${MAIL_TIMEOUT_MS:60000}
+
   grpc:
     client:
       channels:
@@ -69,6 +88,38 @@ springdoc:
 
 service:
   domain: ${SERVICE_DOMAIN_URL}
+
+qrcode:
+  # App-link page the QR code points at (for example https://app.example.org/onboarding); blank = the onboarding URL
+  # of the request itself, which app versions before the link handler need.
+  link-base-url: ${QR_CODE_LINK_BASE_URL:}
+  # The onboarding link a QR code encodes is issued by the mobile service and must be an https URL; plain http
+  # is for local development only.
+  allow-http-onboarding-url: ${QR_CODE_ALLOW_HTTP_ONBOARDING_URL:false}
+
+onboarding:
+  code:
+    # How long a QR code (and the onboarding link in it) is valid, as an ISO-8601 duration. Keep it equal to the
+    # validity of the mobile service's onboarding links (its onboarding.code.validity).
+    validity: ${ONBOARDING_CODE_VALIDITY:P30D}
+
+email:
+  # Sender address of every message
+  from: ${EMAIL_FROM:noreply@example.org}
+  # Application name shown as the sender name and in the message text
+  app-name: ${EMAIL_APP_NAME:eEarly}
+  # Comma-separated recipient domains; messages to any other domain are skipped. * allows all.
+  allowed-recipient-domains: ${EMAIL_ALLOWED_RECIPIENT_DOMAINS:*}
+  # Optional link to the mobile application, shown in the QR code message
+  app-download-url: ${EMAIL_APP_DOWNLOAD_URL:}
+  # Logo shown in the messages (classpath: or file: location); empty sends the messages without a logo
+  logo: ${EMAIL_LOGO:classpath:images/email-logo.png}
+  templates:
+    # Folder of the templates (classpath: or file: location), so a deployment can brand them
+    path: ${EMAIL_TEMPLATE_FOLDER:classpath:templates/email/}
+  qrcode:
+    # Slovenian (default language) template; the English one is the same name with -en before the extension
+    template: ${EMAIL_TEMPLATE:qr-code-email.html}
 
 mobile:
   service:
@@ -89,3 +140,33 @@ algorithm:
       username: ${ALGORITHM_BASIC_AUTH_USERNAME:}
       password: ${ALGORITHM_BASIC_AUTH_PASSWORD:}
     verify-ssl: ${BENTOML_VERIFY_SSL:true}
+
+  # Opt-in support for webhook-style algorithm providers, which answer 202 and report the result later by calling
+  # back to POST /api/v1/analyses/{id}/result. Without a secret there are no callback tokens and no callback URL,
+  # and the result endpoints accept a Keycloak JWT only. Generate a secret with: openssl rand -base64 48
+  callback:
+    token-secret: ${ALGORITHM_CALLBACK_TOKEN_SECRET:}
+    # ISO-8601 duration a callback token is accepted for
+    token-ttl: ${ALGORITHM_CALLBACK_TOKEN_TTL:PT15M}
+
+  # Per-algorithm Basic Auth passwords are stored encrypted (AES-256-GCM). Base64 of 32 bytes, generate with:
+  # openssl rand -base64 32. Without a key no algorithm password can be set or used.
+  credentials:
+    encryption-key: ${ALGORITHM_CREDENTIALS_ENCRYPTION_KEY:}
+
+  # Fails executions that stay SUBMITTED or RUNNING without a result. The timeout must be longer than
+  # algorithm.api.default-timeout-seconds (BENTOML_TIMEOUT), which is checked at startup.
+  stuck-execution-sweep:
+    enabled: ${ALGORITHM_STUCK_SWEEP_ENABLED:true}
+    poll-interval-ms: ${ALGORITHM_STUCK_SWEEP_POLL_INTERVAL_MS:300000}
+    timeout-minutes: ${ALGORITHM_STUCK_SWEEP_TIMEOUT_MINUTES:90}
+
+admin:
+  keycloak:
+    # Client whose client roles authorize calls to this service (resource_access.<client id>.roles).
+    ui-client-id: ${ADMIN_KEYCLOAK_UI_CLIENT_ID:eearly-admin-ui}
+
+patient:
+  demographics-sync:
+    # Send every patient's demographics to the mobile backend once, after startup (backfill and retry).
+    on-startup: ${PATIENT_DEMOGRAPHICS_SYNC_ON_STARTUP:true}

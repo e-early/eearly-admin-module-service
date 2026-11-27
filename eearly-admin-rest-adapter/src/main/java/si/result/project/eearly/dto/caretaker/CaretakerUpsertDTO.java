@@ -23,6 +23,12 @@ public record CaretakerUpsertDTO(
         String email,
 
         @Schema(example = "sl")
-        String language
+        String language,
+
+        @Schema(example = "52378678-4cad-4f7b-893e-9e129e47824a")
+        UUID organizationId,
+
+        @Schema(example = "52378678-4cad-4f7b-893e-9e129e47824a")
+        UUID departmentId
 
 ) {}
