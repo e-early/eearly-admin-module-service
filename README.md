@@ -162,7 +162,7 @@ EHR templates ready
         ↓
 Admin POST /patients          → admin DB + mobile Keycloak user + EHR
         ↓
-Mobile GET /onboarding/{userId}/configuration  → patient JWT
+Mobile GET /onboarding/{code}/configuration  → patient JWT (single-use link)
         ↓
 gRPC CreateMeasurement (HR)   → EHRbase
 gRPC CreateMeasurement (SpO₂)   → EHRbase   ← two calls, two batch IDs
@@ -186,12 +186,13 @@ curl -s http://localhost:9091/realms/eearly-mobile/.well-known/openid-configurat
 curl -s http://localhost:9000/actuator/health
 ```
 
-Extract Keycloak user id from patient response (do **not** use `sed 's|.*/||'` on the full URL):
+Redeem the patient's single-use onboarding link once and keep the response:
 
 ```bash
 export PATIENT_ID=$(jq -r '.payload.id' /tmp/patient.json)
-export USER_ID=$(jq -r '.payload.onboardingUrl' /tmp/patient.json \
-  | sed -E 's|.*/onboarding/||; s|/configuration$||')
+curl -s "$(jq -r '.payload.onboardingUrl' /tmp/patient.json)/configuration" > /tmp/onboarding.json
+export ACCESS_TOKEN=$(jq -r '.accessToken' /tmp/onboarding.json)
+export USER_ID=$(jq -r '.userId' /tmp/onboarding.json)
 ```
 
 See the full guide for template upload, ingest scripts, env vars, and success criteria.
