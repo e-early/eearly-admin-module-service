@@ -101,6 +101,11 @@
         <artifactId>eearly-admin-grpc-adapter</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>si.result.eearly</groupId>
+        <artifactId>eearly-admin-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
       <!-- QR code image generation (ZXing core, Apache License 2.0) -->
       <dependency>
         <groupId>com.google.zxing</groupId>
@@ -144,5 +149,6 @@
     <module>eearly-admin-rest-adapter</module>
     <module>eearly-admin-persistence-adapter</module>
     <module>eearly-admin-grpc-adapter</module>
+    <module>eearly-admin-app</module>
   </modules>
 </project>
