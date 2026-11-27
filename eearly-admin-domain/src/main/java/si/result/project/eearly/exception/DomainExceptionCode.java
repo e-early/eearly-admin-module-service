@@ -102,7 +102,18 @@ public enum DomainExceptionCode implements ExceptionCode {
   ANALYSIS_FEEDBACK_END_DATE_IN_FUTURE("Analysis feedback end date is in the future", ExceptionReason.ILLEGAL_ARGUMENT),
   ANALYSIS_FEEDBACK_DATE_RANGE_INCOMPLETE("Analysis feedback requires both startDate and endDate when either is provided", ExceptionReason.ILLEGAL_ARGUMENT),
 
-  PATIENT_ID_NULL("Patient ID is null", ExceptionReason.ILLEGAL_ARGUMENT);
+  PATIENT_ID_NULL("Patient ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
+
+  NOTIFICATION_ID_NULL("Notification ID is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_NOT_FOUND("Notification not found", ExceptionReason.ENTITY_NOT_FOUND),
+  NOTIFICATION_TYPE_NULL("Notification type is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_MESSAGE_NULL("Notification message is null", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_MESSAGE_TOO_LONG("Notification message is too long", ExceptionReason.ILLEGAL_ARGUMENT),
+  NOTIFICATION_ANALYSIS_HANDLING_FAILED("Failed to handle analysis notification event", ExceptionReason.RUNTIME),
+  NOTIFICATION_ANALYSIS_EXECUTION_HANDLING_FAILED(
+      "Failed to handle algorithm execution notification event", ExceptionReason.RUNTIME),
+  NOTIFICATION_PATIENT_SYNC_FAILED("Failed to handle patient sync notification event", ExceptionReason.RUNTIME),
+  REFERENCE_ID_NULL("Reference ID is null", ExceptionReason.ILLEGAL_ARGUMENT);
 
 
   private final String message;

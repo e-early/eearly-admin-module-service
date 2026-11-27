@@ -9,10 +9,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import si.result.project.eearly.event.notification.event.AnalysisErrorEvent;
+import si.result.project.eearly.event.notification.event.AnalysisReadyEvent;
 import si.result.project.eearly.exception.DomainExceptionCode;
 import si.result.project.eearly.model.analysis.Analysis;
 import si.result.project.eearly.model.analysis.AnalysisState;
@@ -35,6 +38,9 @@ class AnalysisServiceTest {
 
     @Mock
     private AnalysisRepository analysisRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AnalysisService analysisService;
@@ -165,6 +171,9 @@ class AnalysisServiceTest {
             when(analysisRepository.save(any())).thenReturn(savedAnalysis);
 
             analysisService.updateResult(testId, AnalysisState.WAITING_FOR_CONFIRMATION, true);
+
+            verify(eventPublisher).publishEvent(new AnalysisReadyEvent(testId, patientId));
+            verifyNoMoreInteractions(eventPublisher);
         }
 
         @Test
@@ -176,6 +185,9 @@ class AnalysisServiceTest {
             when(analysisRepository.save(any())).thenReturn(savedAnalysis);
 
             analysisService.updateResult(testId, AnalysisState.ERROR, false);
+
+            verify(eventPublisher).publishEvent(new AnalysisErrorEvent(testId, patientId));
+            verifyNoMoreInteractions(eventPublisher);
         }
 
         @Test
@@ -186,6 +198,8 @@ class AnalysisServiceTest {
             when(analysisRepository.save(any())).thenReturn(savedAnalysis);
 
             analysisService.updateResult(testId, AnalysisState.COMPLETED, true);
+
+            verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -198,6 +212,7 @@ class AnalysisServiceTest {
 
             assertEquals(DomainExceptionCode.ANALYSIS_NOT_FOUND, exception.getCode());
             verify(analysisRepository, never()).save(any());
+            verifyNoInteractions(eventPublisher);
         }
     }
 
@@ -215,7 +230,8 @@ class AnalysisServiceTest {
 
             analysisService.updateState(testId, AnalysisState.WAITING_FOR_CONFIRMATION);
 
-            ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+            verify(eventPublisher).publishEvent(new AnalysisReadyEvent(testId, patientId));
+            verifyNoMoreInteractions(eventPublisher);
         }
 
         @Test
@@ -228,7 +244,8 @@ class AnalysisServiceTest {
 
             analysisService.updateState(testId, AnalysisState.ERROR);
 
-            ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+            verify(eventPublisher).publishEvent(new AnalysisErrorEvent(testId, patientId));
+            verifyNoMoreInteractions(eventPublisher);
         }
 
         @Test
@@ -239,6 +256,8 @@ class AnalysisServiceTest {
             when(analysisRepository.save(any())).thenReturn(savedAnalysis);
 
             analysisService.updateState(testId, AnalysisState.IN_PROGRESS);
+
+            verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -251,6 +270,7 @@ class AnalysisServiceTest {
 
             assertEquals(DomainExceptionCode.ANALYSIS_NOT_FOUND, exception.getCode());
             verify(analysisRepository, never()).save(any());
+            verifyNoInteractions(eventPublisher);
         }
     }
 
