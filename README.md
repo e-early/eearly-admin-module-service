@@ -10,8 +10,10 @@ Supports:
 - analyses with **time-range selections**
 - algorithm executions (`POST /predict` on the hosted model)
 
-Does **not** include organization/department/health-condition management, QR onboarding, or development simulation.
-It contains the e-mail infrastructure the QR onboarding sends through (see [E-mail](#e-mail)).
+- **QR code onboarding** (`/api/v1/qrcodes`, see [QR code onboarding](#qr-code-onboarding))
+
+Does **not** include organization/department/health-condition management or development simulation.
+The QR code message is sent through the e-mail infrastructure (see [E-mail](#e-mail)).
 
 ---
 
@@ -231,6 +233,32 @@ the same name with `-en` before the extension (`qr-code-email-en.html`) for Engl
 `EMAIL_TEMPLATE_FOLDER` and `EMAIL_LOGO` at them, for example `file:/etc/eearly/email-templates/`. Placeholders
 are written `{{NAME}}`: `APP_NAME`, `PATIENT_NAME`, `CARETAKER_NAME`, `QR_CODE_IMAGE`, `APP_DOWNLOAD_LINK` and
 `LOGO`. Values are HTML-escaped.
+
+---
+
+## QR code onboarding
+
+A caretaker creates a QR code for a patient assigned to them; the patient scans it (or receives it by e-mail) to
+set up the mobile app. Each code holds a random token and is valid for 30 days.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/v1/qrcodes` | create a code for `patientId` (optional `onboardingUrl`); 201 |
+| `GET /api/v1/qrcodes` | page of the codes of the caller's patients |
+| `GET /api/v1/qrcodes/{id}` | one code |
+| `GET /api/v1/qrcodes/patient/{id}` | the latest code of a patient |
+| `POST /api/v1/qrcodes/send-email` | send the code (`qrCodeId`, `appName`) to the patient's own e-mail address, in the patient's language |
+
+Access: an authenticated caller who is a caretaker, and only for patients assigned to that caretaker. The
+recipient of the e-mail is always the patient's address; the request cannot choose one. Requests without a token
+get 401.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `QR_CODE_LINK_BASE_URL` | empty | base of the link encoded in the code when no `onboardingUrl` is given |
+| `EMAIL_LOGO` | `classpath:images/email-logo.png` | logo drawn in the middle of the code; empty gives a plain code |
+
+Tokens are not logged. There is no rate limiting in the service; put it in front of the endpoints if exposed.
 
 ---
 

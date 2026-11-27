@@ -89,6 +89,11 @@ springdoc:
 service:
   domain: ${SERVICE_DOMAIN_URL}
 
+qrcode:
+  # App-link page the QR code points at (for example https://app.example.org/onboarding); blank = the onboarding URL
+  # of the request itself, which app versions before the link handler need.
+  link-base-url: ${QR_CODE_LINK_BASE_URL:}
+
 email:
   # Sender address of every message
   from: ${EMAIL_FROM:noreply@example.org}
